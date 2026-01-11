@@ -4,6 +4,8 @@
 
 A robust, production-grade semantic search and learning plan generator. All recommendations and plans are strictly grounded in the local dataset. No hallucinated content. Runs only on Python 3.11.
 
+[Streamlit Documentation](https://docs.streamlit.io/)
+
 ---
 
 ## 🚀 Key Features
