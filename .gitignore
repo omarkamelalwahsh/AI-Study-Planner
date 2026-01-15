@@ -1,38 +1,54 @@
+# Environment Variables
+.env
+.env.*
+!.env.example
+
 # Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-*.egg-info/
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+
+# Node / Frontend
+node_modules/
 dist/
 build/
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/coverage/
+.npm
+.yarn
 
-# Virtual env
-.venv/
-venv/
-env/
-
-# Streamlit
-.streamlit/secrets.toml
-
-# Outputs
-outputs/
-*.json
-
-# Model / cache
-.cache/
-huggingface/
-*.safetensors
-*.bin
-*.onnx
-
-# OS / Editor
-.DS_Store
-Thumbs.db
+# IDEs
 .vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
 
-# Data artifacts (do NOT ignore required dataset files)
-!data/courses.csv
-!data/courses_clean.parquet
-!data/faiss.index
-!data/course_embeddings.npy
+# Generated Data & Indexes
+# We keep CSVs/JSONL as samples, but ignore large binary indexes
+data/*.index
+data/*.npy
+data/role_kb_index/
+data/vector_store/
+data/chroma/

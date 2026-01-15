@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-body">
+                <h2 class="card-title text-center mb-4">ابحث عن دورتك القادمة</h2>
+                <form action="/search" method="post">
+                    <div class="mb-3">
+                        <label for="query_text" class="form-label">ماذا تريد أن تتعلم؟</label>
+                        <input type="text" class="form-control form-control-lg" id="query_text" name="query_text"
+                            placeholder="مثلاً: تعلم جافاسكربت من الصفر" required value="{{ query_text }}">
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="weeks" class="form-label">مدة الخطة (أسابيع)</label>
+                            <input type="number" class="form-control" id="weeks" name="weeks" value="{{ weeks }}"
+                                min="1">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="hours_per_week" class="form-label">ساعات الدراسة/أسبوع</label>
+                            <input type="number" class="form-control" id="hours_per_week" name="hours_per_week"
+                                value="{{ hours_per_week }}" min="1">
+                        </div>
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary btn-lg">بحث وتخطيط</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

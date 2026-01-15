@@ -1,0 +1,2078 @@
+{
+  "meta": {
+    "courses": 253,
+    "TOP_K": 20
+  },
+  "exact_title": {
+    "total": 80,
+    "hit@1": 0,
+    "hit@5": 0,
+    "hit1%": 0.0,
+    "hit5%": 0.0
+  },
+  "keyword_strict": {
+    "cases": 111,
+    "avg_precision@k": 0.0,
+    "avg_recall@k": 0.0,
+    "precision%": 0.0,
+    "recall%": 0.0,
+    "keywords_tested": [
+      "ts",
+      "go",
+      "git",
+      "security",
+      "java",
+      "rust",
+      "javascript",
+      "sql",
+      "mysql",
+      "php",
+      "hacking",
+      "cyber",
+      "python",
+      "js"
+    ]
+  },
+  "category": {
+    "cases": 92,
+    "avg_recall@k": 0.0,
+    "recall%": 0.0,
+    "categories_tested": 28
+  },
+  "debug_samples": {
+    "keyword_low_recall_examples": [
+      {
+        "query": "ts",
+        "keyword": "ts",
+        "expected_count": 187,
+        "pred_titles": [],
+        "route": "no_match",
+        "status": "no_match",
+        "debug_reason": "strict_keyword_no_match",
+        "parsed_strict": null
+      },
+      {
+        "query": "learn ts",
+        "keyword": "ts",
+        "expected_count": 187,
+        "pred_titles": [],
+        "route": "no_match",
+        "status": "no_match",
+        "debug_reason": "strict_keyword_no_match",
+        "parsed_strict": null
+      },
+      {
+        "query": "ts course",
+        "keyword": "ts",
+        "expected_count": 187,
+        "pred_titles": [],
+        "route": "no_match",
+        "status": "no_match",
+        "debug_reason": "strict_keyword_no_match",
+        "parsed_strict": null
+      },
+      {
+        "query": "ts beginner",
+        "keyword": "ts",
+        "expected_count": 187,
+        "pred_titles": [],
+        "route": "no_match",
+        "status": "no_match",
+        "debug_reason": "strict_keyword_no_match",
+        "parsed_strict": null
+      },
+      {
+        "query": "عاوز اتعلم ts مبتدئ",
+        "keyword": "ts",
+        "expected_count": 187,
+        "pred_titles": [],
+        "route": "no_match",
+        "status": "no_match",
+        "debug_reason": "strict_keyword_no_match",
+        "parsed_strict": null
+      },
+      {
+        "query": "learn ts مبتدئ",
+        "keyword": "ts",
+        "expected_count": 187,
+        "pred_titles": [],
+        "route": "no_match",
+        "status": "no_match",
+        "debug_reason": "strict_keyword_no_match",
+        "parsed_strict": null
+      },
+      {
+        "query": "go",
+        "keyword": "go",
+        "expected_count": 64,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "learn go",
+        "keyword": "go",
+        "expected_count": 64,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "go course",
+        "keyword": "go",
+        "expected_count": 64,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "go beginner",
+        "keyword": "go",
+        "expected_count": 64,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "عاوز اتعلم go مبتدئ",
+        "keyword": "go",
+        "expected_count": 64,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "learn go مبتدئ",
+        "keyword": "go",
+        "expected_count": 64,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "git",
+        "keyword": "git",
+        "expected_count": 24,
+        "pred_titles": [],
+        "route": "no_match",
+        "status": "no_match",
+        "debug_reason": "strict_keyword_no_match",
+        "parsed_strict": null
+      },
+      {
+        "query": "learn git",
+        "keyword": "git",
+        "expected_count": 24,
+        "pred_titles": [],
+        "route": "no_match",
+        "status": "no_match",
+        "debug_reason": "strict_keyword_no_match",
+        "parsed_strict": null
+      },
+      {
+        "query": "git course",
+        "keyword": "git",
+        "expected_count": 24,
+        "pred_titles": [],
+        "route": "no_match",
+        "status": "no_match",
+        "debug_reason": "strict_keyword_no_match",
+        "parsed_strict": null
+      },
+      {
+        "query": "git beginner",
+        "keyword": "git",
+        "expected_count": 24,
+        "pred_titles": [],
+        "route": "no_match",
+        "status": "no_match",
+        "debug_reason": "strict_keyword_no_match",
+        "parsed_strict": null
+      },
+      {
+        "query": "جيت",
+        "keyword": "git",
+        "expected_count": 24,
+        "pred_titles": [],
+        "route": "no_match",
+        "status": "no_match",
+        "debug_reason": "arabic_ood",
+        "parsed_strict": null
+      },
+      {
+        "query": "عاوز اتعلم جيت",
+        "keyword": "git",
+        "expected_count": 24,
+        "pred_titles": [],
+        "route": "no_match",
+        "status": "no_match",
+        "debug_reason": "low_semantic_score (vec=0.78)",
+        "parsed_strict": null
+      },
+      {
+        "query": "عاوز كورس جيت مبتدئ",
+        "keyword": "git",
+        "expected_count": 24,
+        "pred_titles": [],
+        "route": "no_match",
+        "status": "no_match",
+        "debug_reason": "low_semantic_score (vec=0.78)",
+        "parsed_strict": null
+      },
+      {
+        "query": "عاوز اتعلم git مبتدئ",
+        "keyword": "git",
+        "expected_count": 24,
+        "pred_titles": [],
+        "route": "no_match",
+        "status": "no_match",
+        "debug_reason": "strict_keyword_no_match",
+        "parsed_strict": null
+      },
+      {
+        "query": "learn git مبتدئ",
+        "keyword": "git",
+        "expected_count": 24,
+        "pred_titles": [],
+        "route": "no_match",
+        "status": "no_match",
+        "debug_reason": "strict_keyword_no_match",
+        "parsed_strict": null
+      },
+      {
+        "query": "security",
+        "keyword": "security",
+        "expected_count": 16,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "learn security",
+        "keyword": "security",
+        "expected_count": 16,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "security course",
+        "keyword": "security",
+        "expected_count": 16,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "security beginner",
+        "keyword": "security",
+        "expected_count": 16,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "عاوز اتعلم security مبتدئ",
+        "keyword": "security",
+        "expected_count": 16,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "learn security مبتدئ",
+        "keyword": "security",
+        "expected_count": 16,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "java",
+        "keyword": "java",
+        "expected_count": 8,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "learn java",
+        "keyword": "java",
+        "expected_count": 8,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "java course",
+        "keyword": "java",
+        "expected_count": 8,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "java beginner",
+        "keyword": "java",
+        "expected_count": 8,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "جافا",
+        "keyword": "java",
+        "expected_count": 8,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "عاوز اتعلم جافا",
+        "keyword": "java",
+        "expected_count": 8,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "عاوز كورس جافا مبتدئ",
+        "keyword": "java",
+        "expected_count": 8,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "عاوز اتعلم java مبتدئ",
+        "keyword": "java",
+        "expected_count": 8,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "learn java مبتدئ",
+        "keyword": "java",
+        "expected_count": 8,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "rust",
+        "keyword": "rust",
+        "expected_count": 8,
+        "pred_titles": [],
+        "route": "no_match",
+        "status": "no_match",
+        "debug_reason": "strict_keyword_no_match",
+        "parsed_strict": null
+      },
+      {
+        "query": "learn rust",
+        "keyword": "rust",
+        "expected_count": 8,
+        "pred_titles": [],
+        "route": "no_match",
+        "status": "no_match",
+        "debug_reason": "strict_keyword_no_match",
+        "parsed_strict": null
+      },
+      {
+        "query": "rust course",
+        "keyword": "rust",
+        "expected_count": 8,
+        "pred_titles": [],
+        "route": "no_match",
+        "status": "no_match",
+        "debug_reason": "strict_keyword_no_match",
+        "parsed_strict": null
+      },
+      {
+        "query": "rust beginner",
+        "keyword": "rust",
+        "expected_count": 8,
+        "pred_titles": [],
+        "route": "no_match",
+        "status": "no_match",
+        "debug_reason": "strict_keyword_no_match",
+        "parsed_strict": null
+      },
+      {
+        "query": "عاوز اتعلم rust مبتدئ",
+        "keyword": "rust",
+        "expected_count": 8,
+        "pred_titles": [],
+        "route": "no_match",
+        "status": "no_match",
+        "debug_reason": "strict_keyword_no_match",
+        "parsed_strict": null
+      },
+      {
+        "query": "learn rust مبتدئ",
+        "keyword": "rust",
+        "expected_count": 8,
+        "pred_titles": [],
+        "route": "no_match",
+        "status": "no_match",
+        "debug_reason": "strict_keyword_no_match",
+        "parsed_strict": null
+      },
+      {
+        "query": "javascript",
+        "keyword": "javascript",
+        "expected_count": 7,
+        "pred_titles": [],
+        "route": "exact_course_query",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "learn javascript",
+        "keyword": "javascript",
+        "expected_count": 7,
+        "pred_titles": [],
+        "route": "exact_course_query",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "javascript course",
+        "keyword": "javascript",
+        "expected_count": 7,
+        "pred_titles": [],
+        "route": "exact_course_query",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "javascript beginner",
+        "keyword": "javascript",
+        "expected_count": 7,
+        "pred_titles": [],
+        "route": "exact_course_query",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "جافاسكريبت",
+        "keyword": "javascript",
+        "expected_count": 7,
+        "pred_titles": [],
+        "route": "no_match",
+        "status": "no_match",
+        "debug_reason": "low_semantic_score (vec=0.82)",
+        "parsed_strict": null
+      },
+      {
+        "query": "عاوز اتعلم جافاسكريبت",
+        "keyword": "javascript",
+        "expected_count": 7,
+        "pred_titles": [],
+        "route": "no_match",
+        "status": "no_match",
+        "debug_reason": "low_semantic_score (vec=0.82)",
+        "parsed_strict": null
+      },
+      {
+        "query": "عاوز كورس جافاسكريبت مبتدئ",
+        "keyword": "javascript",
+        "expected_count": 7,
+        "pred_titles": [],
+        "route": "no_match",
+        "status": "no_match",
+        "debug_reason": "low_semantic_score (vec=0.82)",
+        "parsed_strict": null
+      },
+      {
+        "query": "جافا سكريبت",
+        "keyword": "javascript",
+        "expected_count": 7,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "عاوز اتعلم جافا سكريبت",
+        "keyword": "javascript",
+        "expected_count": 7,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "عاوز كورس جافا سكريبت مبتدئ",
+        "keyword": "javascript",
+        "expected_count": 7,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "عاوز اتعلم javascript مبتدئ",
+        "keyword": "javascript",
+        "expected_count": 7,
+        "pred_titles": [],
+        "route": "exact_course_query",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "learn javascript مبتدئ",
+        "keyword": "javascript",
+        "expected_count": 7,
+        "pred_titles": [],
+        "route": "exact_course_query",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "sql",
+        "keyword": "sql",
+        "expected_count": 7,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "learn sql",
+        "keyword": "sql",
+        "expected_count": 7,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "sql course",
+        "keyword": "sql",
+        "expected_count": 7,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "sql beginner",
+        "keyword": "sql",
+        "expected_count": 7,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "اس كيو ال",
+        "keyword": "sql",
+        "expected_count": 7,
+        "pred_titles": [],
+        "route": "no_match",
+        "status": "no_match",
+        "debug_reason": "arabic_ood",
+        "parsed_strict": null
+      },
+      {
+        "query": "عاوز اتعلم اس كيو ال",
+        "keyword": "sql",
+        "expected_count": 7,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "عاوز كورس اس كيو ال مبتدئ",
+        "keyword": "sql",
+        "expected_count": 7,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "SQL",
+        "keyword": "sql",
+        "expected_count": 7,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "عاوز اتعلم SQL",
+        "keyword": "sql",
+        "expected_count": 7,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "عاوز كورس SQL مبتدئ",
+        "keyword": "sql",
+        "expected_count": 7,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "عاوز اتعلم sql مبتدئ",
+        "keyword": "sql",
+        "expected_count": 7,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "learn sql مبتدئ",
+        "keyword": "sql",
+        "expected_count": 7,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "mysql",
+        "keyword": "mysql",
+        "expected_count": 6,
+        "pred_titles": [],
+        "route": "exact_course_query",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "learn mysql",
+        "keyword": "mysql",
+        "expected_count": 6,
+        "pred_titles": [],
+        "route": "exact_course_query",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "mysql course",
+        "keyword": "mysql",
+        "expected_count": 6,
+        "pred_titles": [],
+        "route": "exact_course_query",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "mysql beginner",
+        "keyword": "mysql",
+        "expected_count": 6,
+        "pred_titles": [],
+        "route": "exact_course_query",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "ماي اس كيو ال",
+        "keyword": "mysql",
+        "expected_count": 6,
+        "pred_titles": [],
+        "route": "no_match",
+        "status": "no_match",
+        "debug_reason": "arabic_ood",
+        "parsed_strict": null
+      },
+      {
+        "query": "عاوز اتعلم ماي اس كيو ال",
+        "keyword": "mysql",
+        "expected_count": 6,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "عاوز كورس ماي اس كيو ال مبتدئ",
+        "keyword": "mysql",
+        "expected_count": 6,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "مايسكيول",
+        "keyword": "mysql",
+        "expected_count": 6,
+        "pred_titles": [],
+        "route": "no_match",
+        "status": "no_match",
+        "debug_reason": "arabic_ood",
+        "parsed_strict": null
+      },
+      {
+        "query": "عاوز اتعلم مايسكيول",
+        "keyword": "mysql",
+        "expected_count": 6,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "عاوز كورس مايسكيول مبتدئ",
+        "keyword": "mysql",
+        "expected_count": 6,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "عاوز اتعلم mysql مبتدئ",
+        "keyword": "mysql",
+        "expected_count": 6,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "learn mysql مبتدئ",
+        "keyword": "mysql",
+        "expected_count": 6,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "php",
+        "keyword": "php",
+        "expected_count": 5,
+        "pred_titles": [],
+        "route": "exact_course_query",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "learn php",
+        "keyword": "php",
+        "expected_count": 5,
+        "pred_titles": [],
+        "route": "exact_course_query",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "php course",
+        "keyword": "php",
+        "expected_count": 5,
+        "pred_titles": [],
+        "route": "exact_course_query",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "php beginner",
+        "keyword": "php",
+        "expected_count": 5,
+        "pred_titles": [],
+        "route": "exact_course_query",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "عاوز اتعلم php مبتدئ",
+        "keyword": "php",
+        "expected_count": 5,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "learn php مبتدئ",
+        "keyword": "php",
+        "expected_count": 5,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "hacking",
+        "keyword": "hacking",
+        "expected_count": 5,
+        "pred_titles": [],
+        "route": "exact_course_query",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "learn hacking",
+        "keyword": "hacking",
+        "expected_count": 5,
+        "pred_titles": [],
+        "route": "exact_course_query",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "hacking course",
+        "keyword": "hacking",
+        "expected_count": 5,
+        "pred_titles": [],
+        "route": "exact_course_query",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "hacking beginner",
+        "keyword": "hacking",
+        "expected_count": 5,
+        "pred_titles": [],
+        "route": "exact_course_query",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "عاوز اتعلم hacking مبتدئ",
+        "keyword": "hacking",
+        "expected_count": 5,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "learn hacking مبتدئ",
+        "keyword": "hacking",
+        "expected_count": 5,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "cyber",
+        "keyword": "cyber",
+        "expected_count": 4,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "learn cyber",
+        "keyword": "cyber",
+        "expected_count": 4,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "cyber course",
+        "keyword": "cyber",
+        "expected_count": 4,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "cyber beginner",
+        "keyword": "cyber",
+        "expected_count": 4,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "عاوز اتعلم cyber مبتدئ",
+        "keyword": "cyber",
+        "expected_count": 4,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "learn cyber مبتدئ",
+        "keyword": "cyber",
+        "expected_count": 4,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "python",
+        "keyword": "python",
+        "expected_count": 4,
+        "pred_titles": [],
+        "route": "exact_course_query",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "learn python",
+        "keyword": "python",
+        "expected_count": 4,
+        "pred_titles": [],
+        "route": "exact_course_query",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "python course",
+        "keyword": "python",
+        "expected_count": 4,
+        "pred_titles": [],
+        "route": "exact_course_query",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "python beginner",
+        "keyword": "python",
+        "expected_count": 4,
+        "pred_titles": [],
+        "route": "exact_course_query",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "بايثون",
+        "keyword": "python",
+        "expected_count": 4,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "عاوز اتعلم بايثون",
+        "keyword": "python",
+        "expected_count": 4,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "عاوز كورس بايثون مبتدئ",
+        "keyword": "python",
+        "expected_count": 4,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "عاوز اتعلم python مبتدئ",
+        "keyword": "python",
+        "expected_count": 4,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "learn python مبتدئ",
+        "keyword": "python",
+        "expected_count": 4,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "js",
+        "keyword": "js",
+        "expected_count": 8,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "learn js",
+        "keyword": "js",
+        "expected_count": 8,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "js course",
+        "keyword": "js",
+        "expected_count": 8,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "js beginner",
+        "keyword": "js",
+        "expected_count": 8,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "عاوز اتعلم js مبتدئ",
+        "keyword": "js",
+        "expected_count": 8,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      },
+      {
+        "query": "learn js مبتدئ",
+        "keyword": "js",
+        "expected_count": 8,
+        "pred_titles": [],
+        "route": "topic_search",
+        "status": "ok",
+        "debug_reason": null,
+        "parsed_strict": null
+      }
+    ],
+    "category_low_recall_examples": [
+      {
+        "query": "Banking Skills",
+        "category": "Banking Skills",
+        "expected_count": 4,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "courses in Banking Skills",
+        "category": "Banking Skills",
+        "expected_count": 4,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Banking Skills beginner",
+        "category": "Banking Skills",
+        "expected_count": 4,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Banking Skills مبتدئ",
+        "category": "Banking Skills",
+        "expected_count": 4,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Business Fundamentals",
+        "category": "Business Fundamentals",
+        "expected_count": 15,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "courses in Business Fundamentals",
+        "category": "Business Fundamentals",
+        "expected_count": 15,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Business Fundamentals beginner",
+        "category": "Business Fundamentals",
+        "expected_count": 15,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Business Fundamentals مبتدئ",
+        "category": "Business Fundamentals",
+        "expected_count": 15,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Career Development",
+        "category": "Career Development",
+        "expected_count": 13,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "courses in Career Development",
+        "category": "Career Development",
+        "expected_count": 13,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Career Development beginner",
+        "category": "Career Development",
+        "expected_count": 13,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Career Development مبتدئ",
+        "category": "Career Development",
+        "expected_count": 13,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Customer Service",
+        "category": "Customer Service",
+        "expected_count": 5,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "exact_course_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "courses in Customer Service",
+        "category": "Customer Service",
+        "expected_count": 5,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "exact_course_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Customer Service beginner",
+        "category": "Customer Service",
+        "expected_count": 5,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "exact_course_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Customer Service مبتدئ",
+        "category": "Customer Service",
+        "expected_count": 5,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "exact_course_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Data Security",
+        "category": "Data Security",
+        "expected_count": 10,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "courses in Data Security",
+        "category": "Data Security",
+        "expected_count": 10,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Data Security beginner",
+        "category": "Data Security",
+        "expected_count": 10,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Data Security مبتدئ",
+        "category": "Data Security",
+        "expected_count": 10,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Digital Media",
+        "category": "Digital Media",
+        "expected_count": 2,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "courses in Digital Media",
+        "category": "Digital Media",
+        "expected_count": 2,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Digital Media beginner",
+        "category": "Digital Media",
+        "expected_count": 2,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Digital Media مبتدئ",
+        "category": "Digital Media",
+        "expected_count": 2,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Entrepreneurship",
+        "category": "Entrepreneurship",
+        "expected_count": 2,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "courses in Entrepreneurship",
+        "category": "Entrepreneurship",
+        "expected_count": 2,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Entrepreneurship beginner",
+        "category": "Entrepreneurship",
+        "expected_count": 2,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Entrepreneurship مبتدئ",
+        "category": "Entrepreneurship",
+        "expected_count": 2,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Ethics and Social Responsibility",
+        "category": "Ethics and Social Responsibility",
+        "expected_count": 2,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "courses in Ethics and Social Responsibility",
+        "category": "Ethics and Social Responsibility",
+        "expected_count": 2,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Ethics and Social Responsibility beginner",
+        "category": "Ethics and Social Responsibility",
+        "expected_count": 2,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Ethics and Social Responsibility مبتدئ",
+        "category": "Ethics and Social Responsibility",
+        "expected_count": 2,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Game Design",
+        "category": "Game Design",
+        "expected_count": 2,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "courses in Game Design",
+        "category": "Game Design",
+        "expected_count": 2,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Game Design beginner",
+        "category": "Game Design",
+        "expected_count": 2,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Game Design مبتدئ",
+        "category": "Game Design",
+        "expected_count": 2,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "General",
+        "category": "General",
+        "expected_count": 50,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "courses in General",
+        "category": "General",
+        "expected_count": 50,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "General beginner",
+        "category": "General",
+        "expected_count": 50,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "General مبتدئ",
+        "category": "General",
+        "expected_count": 50,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Graphic Design",
+        "category": "Graphic Design",
+        "expected_count": 33,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "courses in Graphic Design",
+        "category": "Graphic Design",
+        "expected_count": 33,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Graphic Design beginner",
+        "category": "Graphic Design",
+        "expected_count": 33,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Graphic Design مبتدئ",
+        "category": "Graphic Design",
+        "expected_count": 33,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Health & Wellness",
+        "category": "Health & Wellness",
+        "expected_count": 4,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "courses in Health & Wellness",
+        "category": "Health & Wellness",
+        "expected_count": 4,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Health & Wellness beginner",
+        "category": "Health & Wellness",
+        "expected_count": 4,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Health & Wellness مبتدئ",
+        "category": "Health & Wellness",
+        "expected_count": 4,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Human Resources",
+        "category": "Human Resources",
+        "expected_count": 8,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "courses in Human Resources",
+        "category": "Human Resources",
+        "expected_count": 8,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Human Resources beginner",
+        "category": "Human Resources",
+        "expected_count": 8,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Human Resources مبتدئ",
+        "category": "Human Resources",
+        "expected_count": 8,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Marketing Skills",
+        "category": "Marketing Skills",
+        "expected_count": 10,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "courses in Marketing Skills",
+        "category": "Marketing Skills",
+        "expected_count": 10,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Marketing Skills beginner",
+        "category": "Marketing Skills",
+        "expected_count": 10,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Marketing Skills مبتدئ",
+        "category": "Marketing Skills",
+        "expected_count": 10,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Personal Development",
+        "category": "Personal Development",
+        "expected_count": 19,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "courses in Personal Development",
+        "category": "Personal Development",
+        "expected_count": 19,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Personal Development beginner",
+        "category": "Personal Development",
+        "expected_count": 19,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Personal Development مبتدئ",
+        "category": "Personal Development",
+        "expected_count": 19,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Programming",
+        "category": "Programming",
+        "expected_count": 27,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "courses in Programming",
+        "category": "Programming",
+        "expected_count": 27,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Programming beginner",
+        "category": "Programming",
+        "expected_count": 27,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Programming مبتدئ",
+        "category": "Programming",
+        "expected_count": 27,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Project Management",
+        "category": "Project Management",
+        "expected_count": 9,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "exact_course_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "courses in Project Management",
+        "category": "Project Management",
+        "expected_count": 9,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "exact_course_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Project Management beginner",
+        "category": "Project Management",
+        "expected_count": 9,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "exact_course_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Project Management مبتدئ",
+        "category": "Project Management",
+        "expected_count": 9,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "exact_course_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Public Speaking",
+        "category": "Public Speaking",
+        "expected_count": 3,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "exact_course_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "courses in Public Speaking",
+        "category": "Public Speaking",
+        "expected_count": 3,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "exact_course_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Public Speaking beginner",
+        "category": "Public Speaking",
+        "expected_count": 3,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "exact_course_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Public Speaking مبتدئ",
+        "category": "Public Speaking",
+        "expected_count": 3,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Sales",
+        "category": "Sales",
+        "expected_count": 7,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "exact_course_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "courses in Sales",
+        "category": "Sales",
+        "expected_count": 7,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "exact_course_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Sales beginner",
+        "category": "Sales",
+        "expected_count": 7,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "exact_course_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Sales مبتدئ",
+        "category": "Sales",
+        "expected_count": 7,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Soft Skills",
+        "category": "Soft Skills",
+        "expected_count": 10,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "courses in Soft Skills",
+        "category": "Soft Skills",
+        "expected_count": 10,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Soft Skills beginner",
+        "category": "Soft Skills",
+        "expected_count": 10,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Soft Skills مبتدئ",
+        "category": "Soft Skills",
+        "expected_count": 10,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Sustainability",
+        "category": "Sustainability",
+        "expected_count": 4,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "exact_course_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "courses in Sustainability",
+        "category": "Sustainability",
+        "expected_count": 4,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "exact_course_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Sustainability beginner",
+        "category": "Sustainability",
+        "expected_count": 4,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "exact_course_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Sustainability مبتدئ",
+        "category": "Sustainability",
+        "expected_count": 4,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "exact_course_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Technology Applications",
+        "category": "Technology Applications",
+        "expected_count": 6,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "courses in Technology Applications",
+        "category": "Technology Applications",
+        "expected_count": 6,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Technology Applications beginner",
+        "category": "Technology Applications",
+        "expected_count": 6,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Technology Applications مبتدئ",
+        "category": "Technology Applications",
+        "expected_count": 6,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Web Development",
+        "category": "Web Development",
+        "expected_count": 3,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "courses in Web Development",
+        "category": "Web Development",
+        "expected_count": 3,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Web Development beginner",
+        "category": "Web Development",
+        "expected_count": 3,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      },
+      {
+        "query": "Web Development مبتدئ",
+        "category": "Web Development",
+        "expected_count": 3,
+        "pred_count": 0,
+        "pred_titles": [],
+        "route": "category_query",
+        "status": "ok",
+        "debug_reason": null
+      }
+    ]
+  }
+}

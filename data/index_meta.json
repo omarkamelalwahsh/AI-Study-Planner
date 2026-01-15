@@ -1,0 +1,2279 @@
+{
+  "0": {
+    "id": "6981255a-7d98-42f8-9f33-971825e517b6",
+    "title": "Introduction to Mental health",
+    "category": "General",
+    "level": "Beginner",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "1": {
+    "id": "2d363cfc-89fa-4b24-ac39-fe8c6b5a7c41",
+    "title": "WordPress Plugins",
+    "category": "Web Development",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "2": {
+    "id": "c3381546-039c-450f-bd87-9cd59bc1117d",
+    "title": "Face to Face Customer Service",
+    "category": "Customer Service",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "3": {
+    "id": "de16bc3d-1721-4950-8976-0844e63df83d",
+    "title": "HTML Web Design Tools",
+    "category": "Programming",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "4": {
+    "id": "10dea766-040e-42de-8eb0-4a17e65eb037",
+    "title": "JavaScript Basics",
+    "category": "Programming",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "5": {
+    "id": "793bdbcd-a710-4f73-b51d-834c6e8a466b",
+    "title": "Developing Empathy",
+    "category": "Personal Development",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "6": {
+    "id": "2c07c7c6-3611-4ad5-a6f1-c873865e0a34",
+    "title": "C 2019 ASPNet",
+    "category": "Data Security",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "7": {
+    "id": "18a14e05-e06f-4bb7-918a-4c9fbe378efe",
+    "title": "Spin Selling",
+    "category": "Sales",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "8": {
+    "id": "6ad70e5d-1e2f-4176-8a94-70730ff00825",
+    "title": "03 D Max Start Creating your Own Project Material",
+    "category": "Graphic Design",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "9": {
+    "id": "f7c61b74-e80e-4408-952b-027cb882ad86",
+    "title": "Risk Management",
+    "category": "Project Management",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "10": {
+    "id": "e1c3b6ea-dc29-4297-86d2-13d6142b38df",
+    "title": "Improve your listening skills",
+    "category": "Soft Skills",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "11": {
+    "id": "5bad3f11-4872-4571-b384-ef43897ae95b",
+    "title": "PHP 2020 Basics",
+    "category": "Programming",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "12": {
+    "id": "39d12f44-8c3c-42ea-abf0-5c9dbc565eb3",
+    "title": "Digital Marketing Introduction",
+    "category": "Marketing Skills",
+    "level": "Beginner",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "13": {
+    "id": "eb0bf373-a881-40e7-8b4a-61323386a012",
+    "title": "How to manage your managers",
+    "category": "General",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "14": {
+    "id": "58644f32-164e-450f-ad83-043535448368",
+    "title": "Exit Strategies and Business Valuation",
+    "category": "General",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "15": {
+    "id": "9ea94009-5860-4751-92fd-75f9794057e3",
+    "title": "Interviewing Skills",
+    "category": "Human Resources",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "16": {
+    "id": "460eb977-bf44-47b7-a5e6-b320c0ab18e3",
+    "title": "03 D Max Hologram Design",
+    "category": "Graphic Design",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "17": {
+    "id": "4d880559-4b10-44d3-ab58-42c3548e4337",
+    "title": "Essential Unity Controls 1",
+    "category": "Game Design",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "18": {
+    "id": "3ae09a9e-e6c0-4186-a17a-4a47d785f6d0",
+    "title": "Introduction to Digital Transformation",
+    "category": "General",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "19": {
+    "id": "ddb7f6e4-b239-4b11-af14-5c2fd043fee5",
+    "title": "Social Media Marketing Basics",
+    "category": "General",
+    "level": "Beginner",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "20": {
+    "id": "d189e29f-9647-4264-a21d-82d875181403",
+    "title": "Code of Ethics and Corporate Governance",
+    "category": "Ethics and Social Responsibility",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "21": {
+    "id": "a390246a-06dd-4abc-9cbf-10aec92c1652",
+    "title": "Launch Your MySQL Powers",
+    "category": "Data Security",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "22": {
+    "id": "7c7c7243-b3f5-4a90-854a-0b4038552362",
+    "title": "Introduction to Supply Chain Management",
+    "category": "General",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "23": {
+    "id": "311b6413-30c5-42f6-af8b-1ac353bb76f4",
+    "title": "Digital Business Models",
+    "category": "General",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "24": {
+    "id": "f47ab5c5-d5bb-427e-b7ed-41ff9ca55ec0",
+    "title": "Detecting Forgery and Counterfeiting",
+    "category": "Banking Skills",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "25": {
+    "id": "87e5d166-e6e3-42a7-b057-17ef1891bef1",
+    "title": "Serving Customers using Social Media",
+    "category": "Digital Media",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "26": {
+    "id": "ce230188-9fd1-4aaa-ae64-a4724d2e9098",
+    "title": "Digital Transformation",
+    "category": "Business Fundamentals",
+    "level": "Beginner",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "27": {
+    "id": "a540a676-b57b-4588-ae0e-b62fe4e287e6",
+    "title": "Introduction to Digital Transformation",
+    "category": "Business Fundamentals",
+    "level": "Beginner",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "28": {
+    "id": "3490cfc0-ab93-420f-b5f4-5b9ba3122153",
+    "title": "Introduction to Accounting",
+    "category": "General",
+    "level": "Beginner",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "29": {
+    "id": "72bfc68a-3521-4a78-8195-ff63fe960c92",
+    "title": "Agile in Business",
+    "category": "Project Management",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "30": {
+    "id": "fbdd6a3b-c9fe-4a90-8bb4-6ba1e20f51b6",
+    "title": "Working Remotely",
+    "category": "Career Development",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "31": {
+    "id": "466f804d-5795-48c0-a6a5-8c74112978bb",
+    "title": "Digital Transformation in Supply Chain",
+    "category": "General",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "32": {
+    "id": "badcb059-cfad-4561-bddc-af9df7ecc11b",
+    "title": "Developing Civility at Work",
+    "category": "Human Resources",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "33": {
+    "id": "3139eeb3-a9d9-46af-bf24-820890b66a9e",
+    "title": "Revit 2020 Intelligible Projects",
+    "category": "Graphic Design",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "34": {
+    "id": "b7252bd4-feb7-49f0-9335-e5e84a9f08e1",
+    "title": "Social Media for Job Prospecting",
+    "category": "Marketing Skills",
+    "level": "Beginner",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "35": {
+    "id": "335f85aa-d253-4d8a-aa0a-e018734fd982",
+    "title": "Leading at the Speed of Trust",
+    "category": "Entrepreneurship",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "36": {
+    "id": "93ff6abd-bafd-4a6f-b4f1-dcee58f25a99",
+    "title": "Basics of Cognitive Psychology",
+    "category": "General",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "37": {
+    "id": "0fc7ab48-e134-42ae-b68c-dd0f2531ecc6",
+    "title": "Support Your Android Sensors",
+    "category": "Mobile Development",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "38": {
+    "id": "5fdb97bc-37d0-4c8d-af94-cc48139c859f",
+    "title": "Operations Management for Startups",
+    "category": "General",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "39": {
+    "id": "163b7a18-1873-4de2-b98d-751ee2827135",
+    "title": "Sell with Stories",
+    "category": "Sales",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "40": {
+    "id": "64b7fed8-515a-45c8-9264-a3f367eda257",
+    "title": "Go Through Word 2019",
+    "category": "Technology Applications",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "41": {
+    "id": "afb18478-d077-4afe-89a9-8a2c43111bd6",
+    "title": "Work life Balance",
+    "category": "Health & Wellness",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "42": {
+    "id": "452e90c6-886c-48a9-8150-cb74e786c5e8",
+    "title": "Practice your Autocad Skills",
+    "category": "Graphic Design",
+    "level": "Beginner",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "43": {
+    "id": "9c5fd7ca-a9dd-4f26-a58f-edb1fa8bc94c",
+    "title": "Business Acumen",
+    "category": "Career Development",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "44": {
+    "id": "16af4d99-cb73-4ca8-9f6a-59e103c13481",
+    "title": "Cybersecurity Essentials",
+    "category": "General",
+    "level": "Beginner",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "45": {
+    "id": "891bcaaa-0640-46ae-aa55-955b00a78a94",
+    "title": "Stress Management (AR)",
+    "category": "Personal Development",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "46": {
+    "id": "915f6a6d-a5b7-4aa8-afb8-d55f12839549",
+    "title": "Customer Service First Call Resolution",
+    "category": "Customer Service",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "47": {
+    "id": "ed778df8-9fcb-4366-b7da-e98e86428d57",
+    "title": "Publish your First Android Studio Project",
+    "category": "Programming",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "48": {
+    "id": "11982371-7534-4386-89b9-e111e7d1412e",
+    "title": "Get Closer to your Windows 10 Computer",
+    "category": "Technology Applications",
+    "level": "Beginner",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "49": {
+    "id": "3ffc86ad-ee4a-41b2-868f-466dc46f82f2",
+    "title": "Basics of business finance",
+    "category": "General",
+    "level": "Beginner",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "50": {
+    "id": "99db4779-3d58-4e30-8ede-fd743ea408f0",
+    "title": "Visual Basic Modeling Process",
+    "category": "Programming",
+    "level": "Beginner",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "51": {
+    "id": "e4019d43-51ca-478b-90e5-b0cca4a2bbb8",
+    "title": "Revit 2020Simple Steps to Create Splendid Stairs",
+    "category": "Graphic Design",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "52": {
+    "id": "1f75be36-f8fa-44ac-841d-72d395c46ff4",
+    "title": "Hacking Basics of Computer Programming",
+    "category": "Programming",
+    "level": "Beginner",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "53": {
+    "id": "990fbc07-af02-486d-9424-8a46a5a0fa01",
+    "title": "Be an Autocad Artist Autocad Drawing 2",
+    "category": "Graphic Design",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "54": {
+    "id": "fbf569c6-eae1-415d-9457-a18921772605",
+    "title": "Digital Marketing Youtube",
+    "category": "Marketing Skills",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "55": {
+    "id": "81b01eae-537b-48ee-9714-a0d95fce5baa",
+    "title": "Build a Stronger WordPress Website",
+    "category": "Web Development",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "56": {
+    "id": "82821730-45e1-420f-b5f4-c5a16d259c5a",
+    "title": "C 2019 ObjectOriented Programming",
+    "category": "Programming",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "57": {
+    "id": "a37c09c0-dbfa-4b09-92f8-2dde713f7637",
+    "title": "Managing key stakeholders",
+    "category": "Project Management",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "58": {
+    "id": "8c5eea4a-a27b-4107-9915-9b07a0b6f8ee",
+    "title": "Speed Reading",
+    "category": "Personal Development",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "59": {
+    "id": "bf0ff1b4-e930-4066-aca4-c952e962b25f",
+    "title": "IoT and Big Data",
+    "category": "General",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "60": {
+    "id": "4708fbe7-0cbb-45c3-a8e4-f45e7d47cfe6",
+    "title": "Customer Magnet",
+    "category": "Marketing Skills",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "61": {
+    "id": "53bd219f-92bd-4cac-b5f0-98d35e88be7b",
+    "title": "MySQL Advances",
+    "category": "Data Security",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "62": {
+    "id": "111bdeda-4ff8-4bd6-b7bc-e00f436c9efc",
+    "title": "Introduction To Waste Management In Egypt",
+    "category": "Sustainability",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "63": {
+    "id": "16a59640-45f0-4696-b493-ad6d3aea7244",
+    "title": "Customer Service Career",
+    "category": "Career Development",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "64": {
+    "id": "91f001ac-c465-43b7-853d-1a0726c8518a",
+    "title": "Photoshop Tools and Layers",
+    "category": "Graphic Design",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "65": {
+    "id": "dd8ebeb7-516c-4eb9-8d55-0805b1d8f569",
+    "title": "Sustainability in Banking Sector",
+    "category": "Banking Skills",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "66": {
+    "id": "5507143a-5908-472f-a43d-14897ecd64fe",
+    "title": "Body Language Fundamentals",
+    "category": "Public Speaking",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "67": {
+    "id": "4aafc370-6313-4dc7-b5f5-d9a25117e960",
+    "title": "Emotion Management",
+    "category": "Personal Development",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "68": {
+    "id": "36db413b-ad3c-4b90-bf8d-417f328c49b2",
+    "title": "Managing Remote Teams",
+    "category": "Leadership & Management",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "69": {
+    "id": "ef88491d-2b77-4b4a-be76-fe56a52560b8",
+    "title": "Advanced JavaScript",
+    "category": "Programming",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "70": {
+    "id": "4f85966b-1a82-4d8f-bd4f-1e4f23942d6c",
+    "title": "Financial Inclusion",
+    "category": "Banking Skills",
+    "level": "Beginner",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "71": {
+    "id": "17044a77-6435-4b60-9912-22ff3e52c11a",
+    "title": "Critical Thinking",
+    "category": "Personal Development",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "72": {
+    "id": "241ebab1-3d16-4146-a14b-ad3e62e84def",
+    "title": "Effective Complaint Handling Skills",
+    "category": "Customer Service",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "73": {
+    "id": "07b6c018-1796-4400-b123-c9d23f899b2f",
+    "title": "PHP 2020 OOP",
+    "category": "Programming",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "74": {
+    "id": "f6fa6457-8847-4eb1-a066-4d71d5af441b",
+    "title": "Increasing Productivity and Time Management",
+    "category": "Project Management",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "75": {
+    "id": "94da1312-6fbf-4576-ac2c-8fa0311d4763",
+    "title": "Start with 3D Max",
+    "category": "Graphic Design",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "76": {
+    "id": "5603da5e-b60a-40ca-b572-869fbce049a9",
+    "title": "Access 2019 Essentials",
+    "category": "Technology Applications",
+    "level": "Beginner",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "77": {
+    "id": "a93e4ec8-9453-4d34-a8e5-d23ceda5f1c9",
+    "title": "Adobe Animate CC 2019 Learn How to Make your Character Moves",
+    "category": "Graphic Design",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "78": {
+    "id": "3f13fb02-6c3a-4803-8c12-e5fc4f8333be",
+    "title": "Team Dynamics",
+    "category": "Human Resources",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "79": {
+    "id": "f1347b11-70b9-4116-825f-67a4a6b37c15",
+    "title": "Personal Effectiveness",
+    "category": "Personal Development",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "80": {
+    "id": "3f4965ad-a22b-4794-bd96-ef3073f0eb90",
+    "title": "Working With Upset Customers",
+    "category": "Soft Skills",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "81": {
+    "id": "ab696ceb-f747-4198-afd0-80cdf166a529",
+    "title": "Success Recipe to Become a Star",
+    "category": "Career Development",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "82": {
+    "id": "ab36023a-62ac-4388-b555-657e15dfbf6e",
+    "title": "Sell Yourself and Idea Personal Branding",
+    "category": "Marketing Skills",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "83": {
+    "id": "3dbdeaf0-52d0-4a7e-ab7a-b9ea04fcd179",
+    "title": "Introduction to Sustainability",
+    "category": "General",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "84": {
+    "id": "44343607-2fee-4380-b0fe-b57e8611fd9a",
+    "title": "The Art of Happiness",
+    "category": "Personal Development",
+    "level": "Beginner",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "85": {
+    "id": "2a64041e-c474-4786-bd23-253d2db4c54e",
+    "title": "Adobe InDesign Formatting Books",
+    "category": "Graphic Design",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "86": {
+    "id": "f8246187-c068-4457-af67-5e51a1ed2984",
+    "title": "Basics of Scrum and Kanban",
+    "category": "General",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "87": {
+    "id": "0ef04e03-f55f-4c44-990b-d85009722ae1",
+    "title": "Ethical Decision Making in Business",
+    "category": "General",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "88": {
+    "id": "0af3826a-5b21-4863-9a9c-e8fad741ad96",
+    "title": "Analytical skills",
+    "category": "Career Development",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "89": {
+    "id": "0cef3709-04ba-4d38-8ff5-f7d563d82176",
+    "title": "HACCP principles and application",
+    "category": "General",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "90": {
+    "id": "3d41f545-d573-40c9-a16b-53e918e18955",
+    "title": "Digital Marketing Google and Twitter Platforms",
+    "category": "Marketing Skills",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "91": {
+    "id": "58161628-c73c-45ac-a3a7-338360a8a9ff",
+    "title": "Shifting Focus from Team Member to Team Leader",
+    "category": "Career Development",
+    "level": "Beginner",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "92": {
+    "id": "e09a7608-8707-49c9-951b-48e76359e861",
+    "title": "Managing customer expectations",
+    "category": "Business Fundamentals",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "93": {
+    "id": "ad77cfb4-e86b-4423-b417-05d2d73d6ecb",
+    "title": "PowerPoint Beginnings",
+    "category": "Business Fundamentals",
+    "level": "Beginner",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "94": {
+    "id": "52d65913-4fc2-4bf2-b48e-3884fc39cf8d",
+    "title": "How To Pass An Interview",
+    "category": "Personal Development",
+    "level": "Beginner",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "95": {
+    "id": "e1ae3f9b-66b2-4923-be28-1f5f0f580314",
+    "title": "Lateral Thinking",
+    "category": "Personal Development",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "96": {
+    "id": "a9d84a6c-1b62-4a46-8c63-9cf09fbf0db5",
+    "title": "Master The Animation in 3D Max",
+    "category": "Graphic Design",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "97": {
+    "id": "5bd3ed33-1d68-4efd-b63f-706a71a2fa5f",
+    "title": "Influence Persuasion",
+    "category": "Personal Development",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "98": {
+    "id": "9922ccbb-7ddb-46b8-b01e-1e403f1a26d2",
+    "title": "Hacking Start your White Hat Path",
+    "category": "Data Security",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "99": {
+    "id": "48e72e49-c150-4751-a055-e1e31d0f875d",
+    "title": "The Twenties Journey",
+    "category": "Personal Development",
+    "level": "Beginner",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "100": {
+    "id": "7bdf69c8-adab-4544-a84a-1d20326d55a1",
+    "title": "Transition to Senior Management ",
+    "category": "Career Development",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "101": {
+    "id": "c1bf08c0-732b-42a0-bf78-af14b8856ec9",
+    "title": "Customer Service Over The Phone",
+    "category": "Customer Service",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "102": {
+    "id": "283764f7-771b-491a-8a63-0c8a2d424b43",
+    "title": "Designing workplace hygiene policies",
+    "category": "General",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "103": {
+    "id": "9362b50f-e9f8-4d18-9ed7-526fde45b33a",
+    "title": "Unity Basics",
+    "category": "Game Design",
+    "level": "Beginner",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "104": {
+    "id": "3ffdffef-8a52-46f7-aff3-3e3710a69de6",
+    "title": "Advanced Photoshop Shapes and Tools",
+    "category": "Graphic Design",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "105": {
+    "id": "838deca1-8a11-45a3-b9b4-2e276a0a0023",
+    "title": "Presentation Skills for Managers",
+    "category": "Public Speaking",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "106": {
+    "id": "d64ed07b-8a4f-4673-ad70-d7445989cfdd",
+    "title": "Building First Impression",
+    "category": "Personal Development",
+    "level": "Beginner",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "107": {
+    "id": "1a8f6742-39b7-4cdd-a89b-da6d7551c45a",
+    "title": "Visual Basic Advanced Custom Controls",
+    "category": "Programming",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "108": {
+    "id": "6cea8eca-2c3c-4073-bf72-b2f0c6d3e2e7",
+    "title": "PHP 2020 File and Error Handling",
+    "category": "Programming",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "109": {
+    "id": "536d634e-e3bb-47b4-92bb-466e7ab974da",
+    "title": "The Psychology of Internet Addiction",
+    "category": "Personal Development",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "110": {
+    "id": "ea3447c3-14a7-47ec-bc1b-9ff008e3d042",
+    "title": "Digital Transfomation Frameworks",
+    "category": "General",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "111": {
+    "id": "701fc09f-b131-420a-bc2b-b848fe2da6a9",
+    "title": "Lets Practice 3D Max",
+    "category": "Graphic Design",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "112": {
+    "id": "ad9867ff-9703-47f6-957c-abf742204a6b",
+    "title": "Healthy Living",
+    "category": "Health & Wellness",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "113": {
+    "id": "dcdbaf73-4ac5-4319-be19-e05c973be6ed",
+    "title": "Overview of hygiene principles",
+    "category": "General",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "114": {
+    "id": "075fa2e1-8201-4b7b-bb56-3fb6defc12c7",
+    "title": "Revit 2020 Create Walls of Armor",
+    "category": "Graphic Design",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "115": {
+    "id": "c6ddcf88-f0a3-48a9-8a81-a696c7e25770",
+    "title": "Python Database",
+    "category": "Data Security",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "116": {
+    "id": "7880622a-26e3-4ccf-9201-dcb4bbc7d483",
+    "title": "How to Start your Advanced Level in Animate 2019",
+    "category": "Graphic Design",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "117": {
+    "id": "1b1d8a5d-8c12-49bb-8666-2befb8031ead",
+    "title": "HTML Advanced Techniques",
+    "category": "Programming",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "118": {
+    "id": "cd632e11-ebc0-45a9-847a-ec157528d898",
+    "title": "The psychology of selling",
+    "category": "Sales",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "119": {
+    "id": "4f907c81-f49d-46a4-ba6e-f8ead0ac9492",
+    "title": "Business Email Writing",
+    "category": "General",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "120": {
+    "id": "452a0b92-8412-4f3d-b63f-42c6e9a2356c",
+    "title": "Lead Your Company to Winning",
+    "category": "Business Fundamentals",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "121": {
+    "id": "0641f74b-8e12-4e60-9615-e46ee3298c78",
+    "title": "Building business relationships",
+    "category": "Business Fundamentals",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "122": {
+    "id": "185da649-f123-4448-bc57-0126923e7a24",
+    "title": "Sales Prospects",
+    "category": "Sales",
+    "level": "Beginner",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "123": {
+    "id": "68c2a85f-c492-4547-9844-8df12a71ddf6",
+    "title": "Introduction to talent acquisition",
+    "category": "General",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "124": {
+    "id": "f042a57d-33a5-4f88-acb3-5180e7cab1ae",
+    "title": "Getting Started with Word 2019",
+    "category": "Technology Applications",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "125": {
+    "id": "0a3df8e7-9b77-46a1-a1d9-de14ddbf3cae",
+    "title": "Revit 2020Lasting Buildings",
+    "category": "Graphic Design",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "126": {
+    "id": "271bd62a-88d1-4320-842e-b853a51eaa5b",
+    "title": "Growth Hacking",
+    "category": "Marketing Skills",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "127": {
+    "id": "0703b38c-40f1-48fc-8f5a-613333499fa7",
+    "title": "How companies operate",
+    "category": "Entrepreneurship",
+    "level": "Beginner",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "128": {
+    "id": "81d04b74-ac9a-491d-b851-a36bd40ef118",
+    "title": "Fundamentals of renewable energy",
+    "category": "General",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "129": {
+    "id": "5081c811-7951-4814-a57e-0144e2953913",
+    "title": "Office Filling",
+    "category": "Business Fundamentals",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "130": {
+    "id": "abea6ffe-2b8b-4a0a-9946-a476c6ed70c2",
+    "title": "Hacking White Hat Tools",
+    "category": "Data Security",
+    "level": "Beginner",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "131": {
+    "id": "3a7b2347-657c-496a-a777-3133a221b630",
+    "title": "Revit 2020 Become a BIM Artist",
+    "category": "Graphic Design",
+    "level": "Beginner",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "132": {
+    "id": "090c8b8b-5a3c-411b-a625-b9dcbac895c7",
+    "title": "Presentation Skills And Public Speaking",
+    "category": "Personal Development",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "133": {
+    "id": "78cb0138-3369-4c49-bb8e-4f9242d84bee",
+    "title": "Master Access 2019 Advanced",
+    "category": "Business Fundamentals",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "134": {
+    "id": "4aa2d1a8-5c7e-47d0-b050-9ed365aa47d6",
+    "title": "Python Basics 2020",
+    "category": "Programming",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "135": {
+    "id": "f98df63e-8eda-4592-bd57-62a1da88f574",
+    "title": "Kick Start Your Career",
+    "category": "Personal Development",
+    "level": "Beginner",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "136": {
+    "id": "5e04801a-1c41-48ea-8a2c-21096ffff371",
+    "title": "The Art and Science of Prompt Engineering",
+    "category": "General",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "137": {
+    "id": "cc2aa1db-d641-4eaf-b102-03ec30502752",
+    "title": "Revit 2020 Rendering Show off your Fabulous work",
+    "category": "Graphic Design",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "138": {
+    "id": "bc797115-0461-48fa-9e87-23a9a4463d8e",
+    "title": "Emotional Intelligence",
+    "category": "Personal Development",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "139": {
+    "id": "92bfe17d-7e64-499e-9449-3cd481f7b72b",
+    "title": "Experiencing Hajj",
+    "category": "General",
+    "level": "Beginner",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "140": {
+    "id": "a9feba8c-00d6-4ffb-9760-3904b4424051",
+    "title": "Neural networks",
+    "category": "General",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "141": {
+    "id": "4afb6189-50d5-4db7-9e8d-fb74c45be3ce",
+    "title": "Introduction to Corporate Governance",
+    "category": "General",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "142": {
+    "id": "6347ab58-e515-425f-82c4-a8ee182c1a70",
+    "title": "Data-Drive Decision Making",
+    "category": "General",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "143": {
+    "id": "7eadbe75-e09f-40ef-af83-ad8460e2191a",
+    "title": "Business Ethics",
+    "category": "Human Resources",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "144": {
+    "id": "ea57e0f2-d31c-4fa2-914b-584e3bdec9e2",
+    "title": "PHP 2020 Database",
+    "category": "Programming",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "145": {
+    "id": "288b2777-10d4-42a8-924b-706686a4324d",
+    "title": "Accountability",
+    "category": "Ethics and Social Responsibility",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "146": {
+    "id": "083c6cc8-4b40-46a2-9249-e6fe5bf82c7f",
+    "title": "Business Ethics and Etiquette",
+    "category": "General",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "147": {
+    "id": "77a6ef18-2e8e-496f-996f-8bdbec0d7b24",
+    "title": "AllStar Customer Service Team Leadership",
+    "category": "Customer Service",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "148": {
+    "id": "01ec4bcb-17cd-407d-87ea-94d4bf66ac5a",
+    "title": "Adobe Animate CC 2019 for Beginners",
+    "category": "Graphic Design",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "149": {
+    "id": "4ebb80af-1b43-4a4d-a798-d33a53406217",
+    "title": "Supply Chain Analytics",
+    "category": "General",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "150": {
+    "id": "e9f1d87b-3665-4911-b468-a0772248ce65",
+    "title": "Autocad 3D Be the Embodied Hero",
+    "category": "Graphic Design",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "151": {
+    "id": "c721accb-fe24-4570-9ff5-e5e20dad3784",
+    "title": "Sustainability in Corporates",
+    "category": "Sustainability",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "152": {
+    "id": "1c9441e5-4931-4fb8-a69a-cd2d6c56bc3e",
+    "title": "Risk Management and internal controls",
+    "category": "General",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "153": {
+    "id": "2b128117-9bb9-4cdd-b94e-383cbfaf1154",
+    "title": "Team building",
+    "category": "Soft Skills",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "154": {
+    "id": "33bcd1b2-9582-449f-965f-a4ac59d6efa2",
+    "title": "Presentation Skills Basics",
+    "category": "Public Speaking",
+    "level": "Beginner",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "155": {
+    "id": "3d42e0a5-bfed-4491-b367-d780ea4a74f5",
+    "title": "Advanced Interpersonal Skills",
+    "category": "Soft Skills",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "156": {
+    "id": "11501627-5b9d-4c50-888a-58d59de27483",
+    "title": "Make a Deep Friendship with your Windows 10 Computer",
+    "category": "Technology Applications",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "157": {
+    "id": "2534e92f-3034-41e4-adbf-5cdec0715c2f",
+    "title": "Lead Yourself",
+    "category": "Career Development",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "158": {
+    "id": "502d3638-41c4-489b-af8c-6ae298b71dea",
+    "title": "Self Awareness",
+    "category": "Health & Wellness",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "159": {
+    "id": "b3befe0e-fbef-4ebd-8ac1-f744c8fc7a5d",
+    "title": "Managing Change",
+    "category": "Project Management",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "160": {
+    "id": "58f4eee4-c235-480c-b1e8-b55dcbfd9f82",
+    "title": "Learn and Master Sales",
+    "category": "Sales",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "161": {
+    "id": "22f57d2a-15a2-4df5-b7f9-d88dbbb2c5e9",
+    "title": "HTML Essentials",
+    "category": "Programming",
+    "level": "Beginner",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "162": {
+    "id": "e343d2a6-7461-42fc-8a07-77eeab58d908",
+    "title": "Android Studio Build Your Own APK",
+    "category": "Programming",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "163": {
+    "id": "5f5cf557-3df3-4005-9c6b-cab9b5002db2",
+    "title": "Customer Service Basics",
+    "category": "Business Fundamentals",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "164": {
+    "id": "693e79f6-f5e0-48b0-8af2-6ce334a6d870",
+    "title": "Creativity and Innovation",
+    "category": "Creativity and Innovation",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "165": {
+    "id": "6d813110-e3f4-4186-9acb-922ba4229068",
+    "title": "Dealing with Criticism",
+    "category": "Soft Skills",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "166": {
+    "id": "fd491188-7a54-4585-af2a-4bd95579fa11",
+    "title": "Revit 2020Get Started",
+    "category": "Graphic Design",
+    "level": "Beginner",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "167": {
+    "id": "34960550-09f5-4113-a86a-fa78e64d24be",
+    "title": "Project Management Fundamentals",
+    "category": "Project Management",
+    "level": "Beginner",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "168": {
+    "id": "a5219504-6102-4bf7-8e7b-fe80e5a26d32",
+    "title": "How to Manage Your Manager",
+    "category": "Career Development",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "169": {
+    "id": "632e0efe-0c19-4041-965e-97ecb0de38d4",
+    "title": "How to make it in the corporate world",
+    "category": "Career Development",
+    "level": "Beginner",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "170": {
+    "id": "52287301-9ba9-471c-a31f-fb9874ba499a",
+    "title": "Business Writing",
+    "category": "Business Fundamentals",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "171": {
+    "id": "ea675bcd-a29d-4128-b700-2adf846866bd",
+    "title": "Customer Centricity",
+    "category": "Business Fundamentals",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "172": {
+    "id": "87a4578f-9461-4702-a267-43b7e44a7744",
+    "title": "Anger and Stress",
+    "category": "Health & Wellness",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "173": {
+    "id": "c3ee41c7-636c-4c2d-b3e7-c7b3ae98eb1d",
+    "title": "C 2019 Essentials",
+    "category": "Programming",
+    "level": "Beginner",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "174": {
+    "id": "0fc7eaec-74ff-4de6-a341-cc34cbb44953",
+    "title": "Adobe Illustrator Make Your Design Looks Great",
+    "category": "Graphic Design",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "175": {
+    "id": "e285ee73-53dc-4641-90d0-1ee1e0bacc7c",
+    "title": "Logical Thinking",
+    "category": "Soft Skills",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "176": {
+    "id": "6b29f55c-9956-4068-bb83-494bb9cb5701",
+    "title": "JavaScript Regular Expressions and Drawing",
+    "category": "Programming",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "177": {
+    "id": "90a6bdb8-97e8-49ec-831c-8a5a7d7b9987",
+    "title": "Cloud Computing Fundamentals & Practices",
+    "category": "General",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "178": {
+    "id": "80323b92-b07c-4cef-95d0-fc3b7b27c158",
+    "title": "Workplace Diversity",
+    "category": "Human Resources",
+    "level": "Beginner",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "179": {
+    "id": "46678a31-5bd0-40bf-86a0-c9c6881879c1",
+    "title": "Advanced Excel",
+    "category": "Business Fundamentals",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "180": {
+    "id": "a0487f7e-c5a8-4b9a-81e5-33d6b1ccccb2",
+    "title": "MySQL Kick Start Your Career in Databases",
+    "category": "Data Security",
+    "level": "Beginner",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "181": {
+    "id": "21c47b71-e592-4a86-87ee-f3cb58b9cf2e",
+    "title": "Risk and Crisis Management Environmental Awareness",
+    "category": "Disaster Management and Preparedness",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "182": {
+    "id": "391528e0-0085-4bfe-be3b-840cf3683ed9",
+    "title": "Android Studio 2017 Essentials",
+    "category": "Programming",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "183": {
+    "id": "343a1c64-6b53-4909-b8b7-5d6bada67dfd",
+    "title": "Performance Management",
+    "category": "Human Resources",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "184": {
+    "id": "97e5b041-ed12-4761-8776-763332d0a571",
+    "title": "Time Management",
+    "category": "Project Management",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "185": {
+    "id": "6d4e2e2e-8415-412c-aecb-6533384bfb27",
+    "title": "Introduction to Networks 1",
+    "category": "Networking",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "186": {
+    "id": "bd8db01b-17b0-48ce-b52b-cffb843620e6",
+    "title": "Social Psychology Fundamentals",
+    "category": "General",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "187": {
+    "id": "fe3ecd95-3365-4a86-b163-824694016747",
+    "title": "Introduction to Psychology",
+    "category": "General",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "188": {
+    "id": "5815c3a9-73dd-4b82-8dba-6668593f3a12",
+    "title": "Introduction to Visual Basic",
+    "category": "Programming",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "189": {
+    "id": "113758a3-6203-4010-9e1d-ddfe6489e9c8",
+    "title": "Communication Skills",
+    "category": "Soft Skills",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "190": {
+    "id": "a85196d8-0712-4587-8c85-d874fadd6e83",
+    "title": "Team Work",
+    "category": "Soft Skills",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "191": {
+    "id": "a288b99e-540d-4f82-bfd6-3db4becb7f1d",
+    "title": "Operational Risk",
+    "category": "Project Management",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "192": {
+    "id": "6d3e78b8-cb0e-46d0-a47f-4416fb29ccf8",
+    "title": "Basic Teamwork and Collaboration",
+    "category": "General",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "193": {
+    "id": "17a90601-a772-4a36-a4e1-4e107fa248e6",
+    "title": "Be an Autocad Artist Autocad Drawing 1",
+    "category": "Graphic Design",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "194": {
+    "id": "7edcc5f2-161f-4d48-9f91-5c8c9b84e6ec",
+    "title": "Introduction to AutoCAD",
+    "category": "Graphic Design",
+    "level": "Beginner",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "195": {
+    "id": "1f733403-c4a6-4225-917c-67dbda281beb",
+    "title": "Human Development and Behavior",
+    "category": "General",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "196": {
+    "id": "6e600f54-821e-4cb4-b843-5a8c16d7f400",
+    "title": "Excel Essential Training",
+    "category": "Business Fundamentals",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "197": {
+    "id": "7e4313d9-0742-4bae-96e2-ba858e1e8140",
+    "title": "Corporate Social Responsibility (CSR) Principles",
+    "category": "General",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "198": {
+    "id": "5276a49d-8e00-4e75-978b-698d26638c19",
+    "title": "Attention To Details",
+    "category": "Personal Development",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "199": {
+    "id": "ba131eba-fa25-4d03-95f0-59667c21dd00",
+    "title": "Corporate Governance for Startups",
+    "category": "General",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "200": {
+    "id": "1c9bed8e-70fd-4cbf-8087-84d78bc17dd1",
+    "title": "Procurement and Supplier Management",
+    "category": "General",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "201": {
+    "id": "991b3dbd-faaa-4948-819a-34ff4d3385b7",
+    "title": "AI in Everyday life",
+    "category": "General",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "202": {
+    "id": "aa181d2e-9685-4b52-8710-1658bc26156a",
+    "title": "Sustainable Development Goals",
+    "category": "Sustainability",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "203": {
+    "id": "b60dc237-cda6-422d-96c9-477d387dbf1f",
+    "title": "Be a MYSQL Hero",
+    "category": "Data Security",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "204": {
+    "id": "c086f589-c37e-430a-83d1-a55e42f6bb0f",
+    "title": "Python Oriented Programming OOP",
+    "category": "Programming",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "205": {
+    "id": "28179364-277d-442a-a360-c405a0b35fbf",
+    "title": "Risk Management in Supply Chain",
+    "category": "General",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "206": {
+    "id": "19491a60-59d6-4758-b894-a48a251c63c5",
+    "title": "After Effects 2019 Advanced Techniques",
+    "category": "Graphic Design",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "207": {
+    "id": "7e2c76aa-0ab1-45bb-8c28-cab7acb32d53",
+    "title": "Enhancing Resilience",
+    "category": "General",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "208": {
+    "id": "75e46202-6cf1-4ad0-a0aa-20348e278e67",
+    "title": "Cross-cultural communication",
+    "category": "General",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "209": {
+    "id": "faf54fbb-5d89-458a-9fb2-a9bc663bd560",
+    "title": "Adobe Illustrator Essentials",
+    "category": "Graphic Design",
+    "level": "Beginner",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "210": {
+    "id": "63af7298-1b27-48a4-a960-a6e105cf1824",
+    "title": "Art of Coaching",
+    "category": "Career Development",
+    "level": "Beginner",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "211": {
+    "id": "0f98feed-9eb1-4a63-b6d8-c34f30ad83a7",
+    "title": "Python Web Programming",
+    "category": "Programming",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "212": {
+    "id": "00aaa05d-6cad-4eb2-a461-5927b81f65b5",
+    "title": "leadership and influence",
+    "category": "General",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "213": {
+    "id": "cde954d6-e466-4437-b99f-d9f7241c81bd",
+    "title": "Digital Marketing Automation",
+    "category": "General",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "214": {
+    "id": "66e725d1-7dbc-492b-8e0b-fd501fc50814",
+    "title": "After Effects 2019 Effects Presets",
+    "category": "Graphic Design",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "215": {
+    "id": "15b5d76e-2a80-4617-90ab-b7b7c49a7131",
+    "title": "Adobe Illustrator Advanced Techniques",
+    "category": "Graphic Design",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "216": {
+    "id": "bfcbf0ec-3c6e-439a-8752-e1c07c4ddac2",
+    "title": "Giving Constructive Feedback",
+    "category": "Soft Skills",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "217": {
+    "id": "8f311344-c8e3-4106-8331-9138f4bd6f89",
+    "title": "The first 100 Days Magnet Plan",
+    "category": "Personal Development",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "218": {
+    "id": "f1d22fa1-6791-4968-bc96-f0bb070d44a7",
+    "title": "Sexual Harassment in Workplace",
+    "category": "Human Resources",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "219": {
+    "id": "42a222bb-b5ed-4153-b77a-e5260464228d",
+    "title": "WordPress Earn from What you Learn",
+    "category": "Web Development",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "220": {
+    "id": "29c73d5c-d793-47ae-b0f4-50a68b8567be",
+    "title": "Effective Time Management",
+    "category": "General",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "221": {
+    "id": "d12a41e8-2ec6-4595-b948-2cf991ffaae6",
+    "title": "Proactivity",
+    "category": "Personal Development",
+    "level": "Beginner",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "222": {
+    "id": "a2ceb3ae-716c-426f-9d5b-3cf3711d17e8",
+    "title": "Advanced Strategic Negotiation Skills",
+    "category": "Sales",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "223": {
+    "id": "5b665d2c-aef3-4548-b8ce-6c9b00e610c9",
+    "title": "03 D Max Become an Expert in the Final Touches",
+    "category": "Graphic Design",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "224": {
+    "id": "853f63e6-dc03-424d-b16b-2fac06021574",
+    "title": "Sustainability Principles and Sustainability in Business",
+    "category": "Sustainability",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "225": {
+    "id": "6506c79b-6433-4267-825b-8882a4744285",
+    "title": "Sales Principles",
+    "category": "Sales",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "226": {
+    "id": "56e2f020-8139-468e-b0ce-836317e03427",
+    "title": "Excel Formulas and Functions",
+    "category": "Business Fundamentals",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "227": {
+    "id": "6eeb42c0-ef89-4cfe-ac7c-57cc846272eb",
+    "title": "Digital Marketing Advanced Marketing Strategies",
+    "category": "Marketing Skills",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "228": {
+    "id": "3e1d1707-96ec-477b-bf65-f84909266336",
+    "title": "Setting SMART Objectives and Planning",
+    "category": "Project Management",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "229": {
+    "id": "4c937142-fc8b-4704-ab48-3b6e437a9b32",
+    "title": "Fraud Forgery",
+    "category": "Banking Skills",
+    "level": "Beginner",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "230": {
+    "id": "78e7aa29-f48f-489a-b3e5-7a302c7ed6fa",
+    "title": "Adobe InDesign Advanced Techniques",
+    "category": "Graphic Design",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "231": {
+    "id": "2b3a4e33-8759-44f4-b5b2-4c697fcbd9b4",
+    "title": "After Effects 2019 Essentials",
+    "category": "Graphic Design",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "232": {
+    "id": "c34b4803-28e7-47df-ab5b-7f4ef21ae0e1",
+    "title": "Market Research",
+    "category": "Marketing Skills",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "233": {
+    "id": "419fb688-6887-48b8-9b08-74e7e35f3ef6",
+    "title": "03 D Max Master Creating your Own Project Material",
+    "category": "Graphic Design",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "234": {
+    "id": "97a4702f-d604-4d39-be16-9f43343eaa2a",
+    "title": "Employees Rights and Responsibilities",
+    "category": "Human Resources",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "235": {
+    "id": "114d7d4b-dcc8-474f-ab6d-2cca18cdeb56",
+    "title": "Adobe Primere The Utimate Guide",
+    "category": "Digital Media",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "236": {
+    "id": "6b55a573-85cb-4690-8243-72a4c40f60d8",
+    "title": "CSS Basics",
+    "category": "Programming",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "237": {
+    "id": "7c1ddc0c-92bc-4462-8326-ad33229daada",
+    "title": "Basics of Logistics and Transportation",
+    "category": "General",
+    "level": "Beginner",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "238": {
+    "id": "c39fd851-0757-4374-9851-7eb211d2d603",
+    "title": "Adobe InDesign Essentials",
+    "category": "Graphic Design",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "239": {
+    "id": "0c4a4620-4c4b-49bf-a94c-1492177305c4",
+    "title": "Flexibility and Adaptability",
+    "category": "Career Development",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "240": {
+    "id": "8ac32639-6d7f-4d5d-b887-dc5234b783e6",
+    "title": "Access the Worlds Windows Microsoft Edge",
+    "category": "Technology Applications",
+    "level": "Beginner",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "241": {
+    "id": "b3d0b483-3d5e-4fe9-ab4d-1cbc2d29a74f",
+    "title": "Business Office Etiquette",
+    "category": "Soft Skills",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "242": {
+    "id": "601cb828-311a-4b35-b360-822ba1266878",
+    "title": "Natural Learning Processing (NLP)",
+    "category": "General",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "243": {
+    "id": "01a27e7b-1d32-42f6-88df-bab8c7acca21",
+    "title": "JavaScript BOM DOM",
+    "category": "Programming",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "244": {
+    "id": "8b30de11-9c56-4fb7-bba9-8fba3f0f7e7c",
+    "title": "WordPress Your First Steps to Be a FullStack Developer",
+    "category": "Programming",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "245": {
+    "id": "b08326b1-f958-44ec-a221-3801440bace4",
+    "title": "Digital Marketing Facebook",
+    "category": "Marketing Skills",
+    "level": "Beginner",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "246": {
+    "id": "6788a256-299d-4ff9-9296-b6f6a4d1cccc",
+    "title": "PowerPoint Professional Looking Presentation",
+    "category": "Business Fundamentals",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "247": {
+    "id": "eb875f39-9e37-418b-a025-599ae60ee8d6",
+    "title": "Leadership Skills",
+    "category": "Career Development",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "248": {
+    "id": "60e9ecf1-5b97-403f-9426-437e7876d77b",
+    "title": "Advanced PHP 2020",
+    "category": "Programming",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "249": {
+    "id": "69409d99-0c87-4a51-acd8-e7319de7397a",
+    "title": "Hacking Create your Own Keylogger",
+    "category": "Data Security",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "250": {
+    "id": "7cb711cb-1181-4723-9e5c-2cfe0baa3174",
+    "title": "Practice Android Studio 2017",
+    "category": "Programming",
+    "level": "Intermediate",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "251": {
+    "id": "1b35cdec-4369-4e55-933d-5627287de184",
+    "title": "Supply Chain Sustainability and CSR",
+    "category": "General",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  },
+  "252": {
+    "id": "2acccc44-ae80-4de6-92c5-9a1cb4e27595",
+    "title": "Visual Basic Database Concepts",
+    "category": "Data Security",
+    "level": "Advanced",
+    "skills": null,
+    "url": null,
+    "duration_hours": 0.0
+  }
+}

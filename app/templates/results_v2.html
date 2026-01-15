@@ -1,0 +1,13 @@
+{% block scripts %}
+<script>
+    async function generatePlan() {
+        const payload = {
+            query_id: {% raw %}{{ query_id }
+    } {% endraw %},
+    query_text: "{% raw %}{{ query_text }}{% endraw %}",
+        weeks: {% raw %} { { weeks } } {% endraw %},
+    hours_per_week: {% raw %} { { hours_per_week } } {% endraw %}
+    };
+}
+</script>
+{% endblock %}

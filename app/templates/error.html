@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center py-5">
+    <div class="col-md-6 text-center">
+        <div class="display-1 text-danger mb-4">
+            <i class="bi bi-exclamation-triangle"></i>
+        </div>
+        <h2 class="mb-3">عذراً، حدث خطأ ما</h2>
+        <p class="lead text-muted">{{ detail }}</p>
+        <div class="mt-4">
+            <a href="/" class="btn btn-primary btn-lg">العودة للرئيسية</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
