@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="mb-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="/">الرئيسية</a></li>
+            <li class="breadcrumb-item active">السجل</li>
+        </ol>
+    </nav>
+    <h2><i class="bi bi-archive"></i> سجل الخطط الدراسية</h2>
+    <p class="text-muted">عرض جميع الخطط الدراسية التي تم إنشاؤها سابقاً</p>
+</div>
+
+{% if plans %}
+<div class="row">
+    {% for plan in plans %}
+    <div class="col-md-6 mb-4">
+        <div class="card shadow-sm h-100 border-0 hover-card">
+            <div class="card-header bg-gradient text-white"
+                style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                <h5 class="mb-0">
+                    <i class="bi bi-calendar-check"></i>
+                    {{ plan.created_at.strftime('%Y-%m-%d %H:%M') }}
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if plan.query_id and plan.query %}
+                <h6 class="text-primary mb-2">
+                    <i class="bi bi-search"></i> الاستعلام: {{ plan.query.raw_query }}
+                </h6>
+                {% endif %}
+
+                <div class="row text-center mb-3">
+                    <div class="col-6">
+                        <div class="p-2 bg-light rounded">
+                            <small class="text-muted">عدد الأسابيع</small>
+                            <h4 class="mb-0 text-primary">{{ plan.weeks }}</h4>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="p-2 bg-light rounded">
+                            <small class="text-muted">ساعات/أسبوع</small>
+                            <h4 class="mb-0 text-success">{{ plan.hours_per_week }}</h4>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <small class="text-muted">
+                        <i class="bi bi-book"></i>
+                        {% set total_courses = plan.weeks_obj | map(attribute='items') | map('length') | sum %}
+                        {{ total_courses }} دورة إجمالاً
+                    </small>
+                </div>
+
+                <div class="d-grid gap-2">
+                    <a href="/plan/{{ plan.id }}" class="btn btn-primary">
+                        <i class="bi bi-eye"></i> عرض الخطة
+                    </a>
+                </div>
+
+                <div class="mt-2">
+                    <small class="text-muted">
+                        <i class="bi bi-key"></i> المعرف: <code>{{ plan.id }}</code>
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="text-center mt-4">
+    <p class="text-muted">إجمالي الخطط: {{ plans|length }}</p>
+</div>
+
+{% else %}
+<div class="text-center py-5">
+    <div class="mb-4">
+        <i class="bi bi-inbox" style="font-size: 4rem; color: #ccc;"></i>
+    </div>
+    <h4 class="text-muted">لا توجد خطط دراسية حتى الآن</h4>
+    <p class="text-muted">ابدأ بإنشاء خطة دراسية جديدة من الصفحة الرئيسية</p>
+    <a href="/" class="btn btn-primary btn-lg mt-3">
+        <i class="bi bi-plus-circle"></i> إنشاء خطة جديدة
+    </a>
+</div>
+{% endif %}
+
+<style>
+    .hover-card {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .hover-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15) !important;
+    }
+
+    .bg-gradient {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+{% endblock %}
