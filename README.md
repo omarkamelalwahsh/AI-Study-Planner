@@ -1,6 +1,6 @@
 # 🚀 Career Copilot RAG
 
-**Career Copilot** is a production-grade AI career assistant that helps users find personalized learning paths, courses, and career advice. It combines **RAG (Retrieval-Augmented Generation)** with a **Mixtral 8x7B** LLM to provide accurate, context-aware responses in English and Arabic.
+**Career Copilot** is a production-grade AI career assistant that helps users find personalized learning paths, courses, and career advice. It combines **RAG (Retrieval-Augmented Generation)** with the **Groq LLM API** (default: `llama-3.1-8b-instant`) to provide accurate, context-aware responses in English and Arabic.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.11+-blue.svg)
@@ -26,7 +26,7 @@ The system consists of two main components:
 
 1. **Backend (`app/`)**:
     - **Framework**: FastAPI
-    - **LLM Provider**: Groq (Mixtral 8x7B)
+    - **LLM Provider**: Groq API (`llama-3.1-8b-instant` by default)
     - **Retrieval**: Pandas-based semantic & keyword search + Fuzzy matching (`difflib`).
     - **Database**: SQLite (for session persistence).
 

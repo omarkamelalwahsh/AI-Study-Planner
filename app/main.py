@@ -17,7 +17,7 @@ from app.middleware.logging import RequestLoggingMiddleware
 app = FastAPI(
     title="Career Copilot RAG",
     version="1.0.0",
-    description="Production-grade RAG Chat System with Mixtral 8x7B via Ollama"
+    description="Production-grade RAG Chat System powered by Groq LLM API"
 )
 
 # Startup: Ensure DB Tables Exist
