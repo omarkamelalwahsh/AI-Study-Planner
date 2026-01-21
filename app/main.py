@@ -28,13 +28,7 @@ from app.models import ChatSession, ChatMessage
 @app.on_event("startup")
 def on_startup():
     import logging
-    # Setup simple file logger for debugging
-    fhandler = logging.FileHandler("startup_debug.log", mode='w')
-    fhandler.setFormatter(logging.Formatter('%(asctime)s %(message)s'))
-    logger = logging.getLogger("startup")
-    logger.setLevel(logging.INFO)
-    logger.addHandler(fhandler)
-    
+    logger = logging.getLogger("uvicorn")
     logger.info("Startup event triggered.")
     logger.info(f"Engine URL: {engine.url}")
     try:
@@ -44,18 +38,13 @@ def on_startup():
     except Exception as e:
         logger.error(f"Failed to create tables: {e}")
 
-
-
-
-
-
 # CORS Middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
         "http://127.0.0.1:3000",
-        "http://localhost:5173",  # default vite port
+        "http://localhost:5173",
         "http://127.0.0.1:5173",
         "http://localhost:5174",
         "http://127.0.0.1:5174",
@@ -80,24 +69,6 @@ app.add_exception_handler(Exception, general_exception_handler)
 # API Routes
 app.include_router(health.router, prefix="/api/v1", tags=["health"])
 app.include_router(chat.router, prefix="/api/v1", tags=["chat"])
-
-@app.post("/debug-groq")
-async def debug_groq():
-    """
-    Force a simple request to Groq to verify connectivity.
-    """
-    from app.llm.factory import get_llm
-    try:
-        llm = get_llm()
-        messages = [{"role": "user", "content": "Reply with exactly this word: READY. Do not add anything else."}]
-        
-        full_resp = ""
-        async for chunk in llm.stream(messages):
-            full_resp += chunk
-            
-        return {"reply": full_resp}
-    except Exception as e:
-        return {"error": str(e)}
 
 
 # Serve Frontend Static Files

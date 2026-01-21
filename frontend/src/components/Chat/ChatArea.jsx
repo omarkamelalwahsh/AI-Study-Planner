@@ -1,12 +1,10 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Trash2 } from 'lucide-react';
 import MessageBubble from './MessageBubble';
 import Composer from './Composer';
-import TopicModal from './TopicModal';
 
 const ChatArea = ({ activeChat, onSendMessage, onClearChat }) => {
     const scrollRef = useRef(null);
-    const [isTopicModalOpen, setIsTopicModalOpen] = useState(false);
 
     // Auto-scroll to bottom on new messages
     useEffect(() => {
@@ -18,27 +16,11 @@ const ChatArea = ({ activeChat, onSendMessage, onClearChat }) => {
     const isEmpty = !activeChat?.messages?.length;
 
     const handleSuggestionClick = (suggestion) => {
-        if (suggestion === 'تحديد مستواي') {
-            setIsTopicModalOpen(true);
-        } else {
-            onSendMessage(suggestion);
-        }
-    };
-
-    const handleTopicSelection = (topic) => {
-        setIsTopicModalOpen(false);
-        // Send the specific intent: "Assess my level in [Topic]"
-        // Using Arabic as requested by persona constraints
-        onSendMessage(`تحديد مستواي في ${topic}`);
+        onSendMessage(suggestion);
     };
 
     return (
         <div className="flex flex-col h-full w-full bg-bg-primary relative">
-            <TopicModal
-                isOpen={isTopicModalOpen}
-                onClose={() => setIsTopicModalOpen(false)}
-                onSelect={handleTopicSelection}
-            />
 
             {/* Header */}
             <header className="flex-none h-14 border-b border-border flex items-center px-4 justify-between bg-bg-primary/80 backdrop-blur-sm sticky top-0 z-10">

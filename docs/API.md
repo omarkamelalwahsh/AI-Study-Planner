@@ -1,56 +1,76 @@
-# API Documentation
+# API Reference
 
-Base URL: `http://localhost:8000`
+This document details the REST API endpoints available in the Career Copilot RAG backend.
 
-## Core
+**Base URL**: `http://localhost:8000/api/v1`
 
-### `GET /health`
+## 🩺 System
 
-Returns `{"status": "ok"}`. Used for liveness probes.
+### Health Check
 
-### `GET /ready`
+`GET /health`
+Returns the status of the API and its dependencies.
 
-Detailed readiness check. Verifies:
+**Response:**
 
-1. Database connection.
-2. Search index loaded.
-Returns `503` if not ready.
+```json
+{
+  "status": "ok",
+  "version": "1.0.0",
+  "environment": "development"
+}
+```
 
-## Career Copilot (Chat)
+---
 
-### `POST /career-copilot`
+## 💬 Chat
 
-Main conversation endpoint.
+### Send Message
 
-* **Body**: `CareerCopilotRequest`
-  * `message`: User text.
-  * `session_id`: UUID (optional, for continuity).
-  * `constraints`: `{ "weekly_hours": 10, ... }`
-* **Response**: `PlanOutput`
-  * `summary`: Text response.
-  * `plan_weeks`: Structured weekly schedule.
+`POST /chat`
+Main endpoint for interacting with the RAG chatbot. Supports specialized intent detection (learning paths, course recommendations, general advice).
 
-## Sessions
+**Request Body:**
 
-### `POST /sessions`
+```json
+{
+  "messages": [
+    { "role": "user", "content": "I want to learn Python" }
+  ],
+  "session_id": "uuid-string",
+  "client_state": {
+    "last_topic": "string (optional)",
+    "last_courses": []
+  }
+}
+```
 
-Create a new chat session.
+**Response (JSON):**
 
-* **Body**: `{"title": "optional"}`
-* **Response**: `{"id": "uuid", ...}`
+```json
+{
+  "message": "Here is a Python learning path...",
+  "courses": [
+    {
+      "course_id": "123",
+      "title": "Python for Beginners",
+      "level": "Beginner",
+      "category": "Programming",
+      "instructor": "John Doe",
+      "duration_hours": 10.5
+    }
+  ],
+  "study_plan": [],
+  "client_state": { ... }
+}
+```
 
-### `GET /sessions/{id}/messages`
+---
 
-Retrieve message history.
+## 🛑 Error Handling
 
-## Memory (Opt-in)
+The API returns standard HTTP error codes:
 
-### `POST /memory`
-
-Save a user preference.
-
-* **Body**: `{"key": "preferred_role", "value": "Data Scientist", "user_id": "uuid"}`
-
-### `DELETE /memory/{id}`
-
-Remove a memory item.
+- `400 Bad Request`: Validation errors or missing input.
+- `404 Not Found`: Resource not found.
+- `503 Service Unavailable`: Backend service (LLM/DB) issues.

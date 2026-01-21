@@ -1,3 +1,0 @@
-2026-01-21 11:26:21,560 Startup event triggered.
-2026-01-21 11:26:21,560 Engine URL: postgresql+psycopg2://career_user:***@localhost:5432/career_copilot
-2026-01-21 11:26:21,569 Base.metadata.create_all executed successfully.

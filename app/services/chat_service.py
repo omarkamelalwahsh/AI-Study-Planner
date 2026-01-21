@@ -375,7 +375,8 @@ class ChatService:
                           allowed_ids.add(str(item.course_id))
 
             # Enforce guardrails on courses
-            from app.services.guardrails import enforce_guardrails
+            # Enforce guardrails on courses
+            # from app.services.guardrails import enforce_guardrails # REMOVED: Defined locally
             enforce_guardrails(guarded_data, allowed_ids, current_state.consent_given)
 
             # 3. Model Validation

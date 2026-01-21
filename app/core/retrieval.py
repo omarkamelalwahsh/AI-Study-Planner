@@ -211,6 +211,92 @@ def normalize_topic(user_text: str) -> Tuple[str, str, bool]:
 
 
 # =========================
+# Course Title Matching (Exact + Fuzzy)
+# =========================
+from difflib import get_close_matches
+
+def find_course_by_title(
+    user_text: str,
+    df: pd.DataFrame,
+    *,
+    cutoff: float = 0.7,
+    max_results: int = 1
+) -> Optional[dict]:
+    """
+    Attempt to find a course by exact or fuzzy title match.
+    Returns the best matching course dict if found, else None.
+    
+    Priority:
+    1. Exact title match (case-insensitive)
+    2. Partial substring match (title contains query or query contains title)
+    3. Fuzzy match via difflib
+    """
+    _ensure_cols(df)
+    
+    if not user_text or df.empty:
+        return None
+    
+    # Normalize user text
+    query = _safe_lower(user_text)
+    
+    # Remove common prefixes that indicate title search
+    title_prefixes = [
+        r"عاوز كورس\s*", r"عايز كورس\s*", r"كورس اسمه\s*", r"كورس\s*",
+        r"course named\s*", r"course called\s*", r"give me\s*", r"find\s*",
+        r"show me\s*", r"ابحث عن\s*", r"دورة\s*"
+    ]
+    clean_query = query
+    for prefix in title_prefixes:
+        clean_query = re.sub(rf"^{prefix}", "", clean_query, flags=re.IGNORECASE).strip()
+    
+    if not clean_query or len(clean_query) < 3:
+        return None
+    
+    # Build title list
+    titles_lower = df["title"].fillna("").astype(str).str.lower().tolist()
+    titles_original = df["title"].fillna("").astype(str).tolist()
+    
+    # 1) Exact match
+    for idx, title in enumerate(titles_lower):
+        if title == clean_query:
+            return _course_row_to_dict(df.iloc[idx])
+    
+    # 2) Substring match (user typed part of title or title contains query)
+    for idx, title in enumerate(titles_lower):
+        if clean_query in title or title in clean_query:
+            return _course_row_to_dict(df.iloc[idx])
+    
+    # 3) Fuzzy match
+    matches = get_close_matches(clean_query, titles_lower, n=max_results, cutoff=cutoff)
+    if matches:
+        best = matches[0]
+        idx = titles_lower.index(best)
+        return _course_row_to_dict(df.iloc[idx])
+    
+    return None
+
+
+def _course_row_to_dict(row: pd.Series) -> dict:
+    """Convert a DataFrame row to a course dict with all fields."""
+    course_id = ""
+    if "course_id" in row:
+        course_id = str(row["course_id"])
+    elif "id" in row:
+        course_id = str(row["id"])
+    
+    return {
+        "course_id": course_id,
+        "title": str(row.get("title", "")),
+        "category": str(row.get("category", "")),
+        "level": str(row.get("level", "")),
+        "instructor": str(row.get("instructor", "")),
+        "duration_hours": float(row["duration_hours"]) if pd.notna(row.get("duration_hours")) and str(row.get("duration_hours")).strip() != "" else 0.0,
+        "skills": str(row.get("skills", "")) if pd.notna(row.get("skills")) else "",
+        "description": str(row.get("description", "")) if pd.notna(row.get("description")) else "",
+    }
+
+
+# =========================
 # Regex helpers
 # =========================
 def _word_regex(term: str) -> str:

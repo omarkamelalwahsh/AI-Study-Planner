@@ -195,11 +195,37 @@ async def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
         }
 
     # 2. Detect topic + language
-    from app.core.retrieval import normalize_topic, get_courses_by_topic, flatten_grouped
+    from app.core.retrieval import normalize_topic, get_courses_by_topic, flatten_grouped, find_course_by_title
     from app.core.formatting import build_definition, build_uses, format_courses, closure_question
     import pandas as pd
     
     df = pd.read_csv(DATA_PATH)
+    
+    # ============================================
+    # PRIORITY: Exact/Fuzzy Course Title Matching
+    # ============================================
+    title_match = find_course_by_title(last_message, df)
+    if title_match:
+        # Format response in Arabic with course details
+        duration_str = f"{title_match['duration_hours']:.1f} ساعة" if title_match.get('duration_hours') else "غير محدد"
+        description = title_match.get('description', '') or "لا يوجد وصف متاح"
+        
+        msg = f"""📘 **الكورس:** {title_match['title']}
+🎯 **المستوى:** {title_match['level']}
+📂 **المجال:** {title_match['category']}
+📝 **الوصف:** {description[:200]}{'...' if len(description) > 200 else ''}
+🎓 **المدرّب:** {title_match['instructor']}
+⏱ **المدة:** {duration_str}
+
+هل تحب أعملك خطة دراسية للكورس ده؟"""
+        
+        return {
+            "message": msg,
+            "courses": [title_match],
+            "study_plan": [],
+            "client_state": {"last_topic": title_match['title'], "last_courses": [title_match]}
+        }
+    
     topic, lang, intent_detected = normalize_topic(last_message)
 
     # 3. Category mode (limit 5 only, ask for track)
