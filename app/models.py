@@ -50,6 +50,7 @@ class ChatSession(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     created_at = Column(TIMESTAMP, default=datetime.utcnow)
     updated_at = Column(TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
+    session_memory = Column(JSONB, default={})
 
 
 class ChatMessage(Base):
@@ -77,7 +78,7 @@ class ChatMessage(Base):
 
 class CourseSchema(BaseModel):
     """Course response schema."""
-    course_id: str
+    course_id: str | uuid.UUID
     title: str
     category: Optional[str] = None
     level: Optional[str] = None
@@ -98,6 +99,10 @@ class RouterOutput(BaseModel):
         "GREETING",
         "COURSE_DETAILS",
         "SEARCH",
+        "SKILL_SEARCH",
+        "CATEGORY_BROWSE",
+        "AVAILABILITY_CHECK",
+        "FOLLOW_UP",
         "CAREER_GUIDANCE",
         "PLAN_REQUEST",
         "OUT_OF_SCOPE",
@@ -106,6 +111,7 @@ class RouterOutput(BaseModel):
     ]
     target_categories: List[str] = Field(default_factory=list)
     course_title_candidate: Optional[str] = None
+    english_search_term: Optional[str] = None
     goal_role: Optional[str] = None
     keywords: List[str] = Field(default_factory=list)
     user_language: Literal["ar", "en", "mixed"] = "ar"
@@ -126,6 +132,8 @@ class CourseDetail(BaseModel):
     instructor: Optional[str] = None
     duration_hours: Optional[float] = None
     description: Optional[str] = None
+    skills: Optional[str] = None
+    cover: Optional[str] = None
 
 
 class ErrorDetail(BaseModel):
