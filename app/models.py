@@ -95,6 +95,7 @@ class RouterOutput(BaseModel):
     """Router intent classification output with scope gating."""
     in_scope: bool
     intent: Literal[
+        "GREETING",
         "COURSE_DETAILS",
         "SEARCH",
         "CAREER_GUIDANCE",

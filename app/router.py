@@ -37,6 +37,7 @@ Your job:
      (examples: leadership, management, time management, communication, negotiation, sales, programming, cybersecurity, web, mobile, marketing, HR, banking, project management, etc.)
    - in_scope=false if the topic is clearly unrelated and does not map (e.g., cooking, acting, sports news, movie recommendations).
 3) Choose intent:
+   - GREETING: simple greetings like hi, hello, hey, مرحبا, اهلا, السلام عليكم, ازيك, صباح الخير
    - COURSE_DETAILS: user asks about a specific course title OR asks instructor/level/category/description for a named course
    - SEARCH: user wants browsing courses by category/level/topic keywords
    - CAREER_GUIDANCE: user wants advice to become better at an in-scope role/skill, without a time-based schedule
@@ -57,7 +58,7 @@ Return JSON:
 {
   "user_language": "en|ar|mixed",
   "in_scope": true,
-  "intent": "COURSE_DETAILS|SEARCH|CAREER_GUIDANCE|PLAN_REQUEST|SUPPORT_POLICY|UNSAFE|OUT_OF_SCOPE",
+  "intent": "GREETING|COURSE_DETAILS|SEARCH|CAREER_GUIDANCE|PLAN_REQUEST|SUPPORT_POLICY|UNSAFE|OUT_OF_SCOPE",
   "target_categories": [],
   "keywords": [],
   "course_title_candidate": null

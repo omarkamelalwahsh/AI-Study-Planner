@@ -17,7 +17,6 @@ CRITICAL: Your response MUST be plain text only.
 - Do NOT use Markdown at all (no **, no ###, no backticks).
 - Do NOT add wrappers like "=== ANSWER ===".
 - Use only the exact headings and bullet formatting specified below.
-- ALWAYS start your response with "CP_V2:" on the first line.
 
 You will receive a SYSTEM STATE block with:
 - in_scope (true/false)
@@ -63,8 +62,6 @@ Never switch languages unexpectedly.
 ========================
 Your response MUST follow this structure exactly and nothing else:
 
-CP_V2:
-
 TITLE:
 (one short sentence)
 
@@ -93,6 +90,7 @@ QUESTION:
 ========================
 5) INTENT RULES
 ========================
+- GREETING: Reply with a short, friendly greeting. Just say hello back naturally (1-2 sentences max). Do NOT use the structured format for greetings.
 - CAREER_GUIDANCE: Fill SKILLS and NEXT STEPS fully.
 - SEARCH: Keep SKILLS to max 2 bullets and NEXT STEPS to max 2 steps, focus on listing courses.
 - COURSE_DETAILS: Only output the specific course fields from catalog_results.
@@ -143,6 +141,23 @@ def generate_response(
     # Prepare catalog context
     catalog_results = catalog_results or []
     suggested_titles = suggested_titles or []
+    
+    # Handle GREETING intent with simple response (no LLM call needed)
+    if intent == "GREETING":
+        if user_language == "ar":
+            greetings = [
+                "أهلاً! 👋 أنا مساعدك للتوجيه المهني. إزاي أقدر أساعدك النهارده؟",
+                "مرحباً! 👋 أنا هنا عشان أساعدك تختار الكورسات المناسبة. إيه اللي محتاجه؟",
+                "أهلاً وسهلاً! 👋 قولي إزاي أقدر أساعدك في مسارك المهني؟"
+            ]
+        else:
+            greetings = [
+                "Hello! 👋 I'm your career guidance assistant. How can I help you today?",
+                "Hi there! 👋 I'm here to help you find the right courses. What are you looking for?",
+                "Hey! 👋 Ready to help with your career journey. What would you like to learn?"
+            ]
+        import random
+        return random.choice(greetings)
     
     # Build RouterOutput for system state
     router_output = RouterOutput(
