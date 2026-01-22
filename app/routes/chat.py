@@ -3,7 +3,7 @@ Chat endpoint - main RAG pipeline with scope-gated retrieval.
 """
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, desc
 from app.database import get_db
 from app.models import ChatRequest, ChatResponse, ErrorResponse, CourseDetail, ErrorDetail, ChatSession, ChatMessage
 import hashlib
@@ -102,7 +102,44 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
         
         request_log["course_count"] = len(catalog_results)
         
-        # Step 4: Generator - get LLM response (scope-aware)
+        # Step 4: Prepare Session ID & Fetch History
+        # We determine session_uuid early to fetch history.
+        session_id_str = request.session_id
+        session_uuid = None
+        
+        if session_id_str:
+            try:
+                session_uuid = uuid.UUID(session_id_str)
+            except ValueError:
+                session_uuid = uuid.uuid4()
+                session_id_str = str(session_uuid)
+        else:
+            session_uuid = uuid.uuid4()
+            session_id_str = str(session_uuid)
+
+        # Fetch chat history (max 50, sort in python)
+        try:
+            history_stmt = (
+                select(ChatMessage)
+                .where(ChatMessage.session_id == session_uuid)
+                .limit(50)
+            )
+            history_result = await db.execute(history_stmt)
+            all_records = history_result.scalars().all()
+            
+            # Sort by created_at desc
+            sorted_records = sorted(all_records, key=lambda x: x.created_at, reverse=True)
+            history_records = sorted_records[:10][::-1] # Last 10, then reversed to chronological
+            
+            chat_history = [
+                {"role": msg.role, "content": msg.content}
+                for msg in history_records
+            ]
+        except Exception as e:
+            logger.warning(f"Failed to fetch history: {e}")
+            chat_history = []
+
+        # Step 5: Generator - get LLM response
         try:
             response_text = generate_response(
                 user_question=message,
@@ -111,48 +148,35 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
                 target_categories=target_categories,
                 catalog_results=catalog_results,
                 suggested_titles=suggested_titles if not catalog_results else None,
-                user_language=user_language
+                user_language=user_language,
+                chat_history=chat_history
             )
         except GroqUnavailableError as e:
-            # Generator failed - return 503 (no fallback)
             logger.error(f"Generator unavailable: {e}")
             raise HTTPException(
                 status_code=503,
                 detail={"error": "LLM unavailable", "component": "generator"}
             )
-        
-        # Step 5: Session management
-        # Get or create session
-        session_id_str = request.session_id
-        if session_id_str:
-            # Verify session exists
-            try:
-                session_uuid = uuid.UUID(session_id_str)
-                stmt = select(ChatSession).where(ChatSession.id == session_uuid)
-                result = await db.execute(stmt)
-                session = result.scalar_one_or_none()
-                if not session:
-                    # Create new session with provided ID
-                    session = ChatSession(id=session_uuid)
-                    db.add(session)
-                    await db.commit()
-            except (ValueError, Exception):
-                # Invalid UUID or error - create new session
-                session = ChatSession()
+            
+        # Step 6: Ensure Session Exists (DB)
+        # We do this after generation to allow partial failure (if gen fails, we might not need session?)
+        # But per requirements we should persist.
+        try:
+            stmt = select(ChatSession).where(ChatSession.id == session_uuid)
+            result = await db.execute(stmt)
+            session = result.scalar_one_or_none()
+            if not session:
+                session = ChatSession(id=session_uuid)
                 db.add(session)
                 await db.commit()
-                session_id_str = str(session.id)
-        else:
-            # Create new session
-            session = ChatSession()
-            db.add(session)
-            await db.commit()
-            session_id_str = str(session.id)
+        except Exception as e:
+            logger.error(f"Session creation failed: {e}")
+            # If session creation fails, we might fail to save messages later
+            # But we continue to return response if possible
         
-        # Generate request ID
+        # Generate outgoing request ID
         request_id = str(uuid.uuid4())
         request_uuid = uuid.UUID(request_id)
-        session_uuid = uuid.UUID(session_id_str)
         
         # Step 5b: Store user message in chat_messages
         latency_ms = int((time.time() - start_time) * 1000)
@@ -212,4 +236,4 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
         raise  # Re-raise HTTP exceptions as-is
     except Exception as e:
         logger.exception(f"Unexpected error in chat endpoint: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")

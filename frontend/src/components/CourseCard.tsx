@@ -18,7 +18,7 @@ export default function CourseCard({ course }: CourseCardProps) {
             <div className="course-header">
                 <h3 className="course-title">{course.title}</h3>
                 {course.level && (
-                    <span className={`course-level level-${course.level.toLowerCase()}`}>
+                    <span className={`level-badge level-${course.level.toLowerCase()}`}>
                         {course.level}
                     </span>
                 )}
