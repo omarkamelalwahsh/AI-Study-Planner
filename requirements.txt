@@ -1,29 +1,29 @@
-# Web Framework
-fastapi==0.109.0
-uvicorn[standard]==0.27.0
-python-multipart==0.0.6
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+sqlalchemy==2.0.36
+asyncpg==0.30.0
+psycopg2-binary==2.9.10
+pydantic==2.10.3
+pydantic-settings==2.6.1
+python-dotenv==1.0.1
 
-# LLM Client (Groq)
-groq>=0.4.0
-
-# Database
-sqlalchemy==2.0.25
-psycopg2-binary==2.9.9
-
-# Data Processing (using versions with pre-built wheels)
-pandas>=2.0.0
-numpy>=1.24.0
-
-# Vector Search
-faiss-cpu==1.7.4
-
-# ML/Embeddings (torch will auto-install compatible numpy)
-sentence-transformers==2.3.1
-
-# Validation & Config
-pydantic==2.5.3
-pydantic-settings==2.1.0
+# LLM & Embeddings
+groq==0.11.0
+sentence-transformers==3.3.1
+faiss-cpu==1.9.0
+numpy==1.26.4
 
 # Utilities
-python-dotenv==1.0.0
-jinja2==3.1.3
+httpx==0.28.1
+python-multipart==0.0.20
+fuzzywuzzy==0.18.0
+python-Levenshtein==0.26.1
+
+# Testing
+pytest==8.3.4
+pytest-asyncio==0.24.0
+pytest-cov==6.0.0
+
+# Development
+black==24.10.0
+ruff==0.8.4

@@ -1,105 +1,97 @@
-from dotenv import load_dotenv
-load_dotenv()  # Load environment variables from .env file
-
+"""
+FastAPI application entry point.
+"""
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.exceptions import RequestValidationError
-from starlette.exceptions import HTTPException as StarletteHTTPException
+from contextlib import asynccontextmanager
+from app.config import settings
+from app.retrieval import load_vector_store
+from app.routes import chat, health, courses, sessions
+import logging
 
-from app.api.routes import chat, health
-from app.core.errors import (
-    http_exception_handler,
-    validation_exception_handler,
-    general_exception_handler
+# Configure logging
+logging.basicConfig(
+    level=getattr(logging, settings.log_level.upper()),
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
-from app.middleware.logging import RequestLoggingMiddleware
+logger = logging.getLogger(__name__)
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup and shutdown events."""
+    # Startup
+    logger.info(f"Starting Career Copilot RAG API (env: {settings.app_env})")
+    
+    # Production validation: Fail fast if Groq API key missing
+    if settings.is_production:
+        if not settings.groq_api_key or settings.groq_api_key == "INSERT_YOUR_GROQ_API_KEY_HERE":
+            logger.critical("CRITICAL: GROQ_API_KEY not configured in production!")
+            raise RuntimeError(
+                "Production startup failed: GROQ_API_KEY is missing or placeholder. "
+                "Set a valid Groq API key in .env before starting in production mode."
+            )
+        logger.info("✓ Groq API key configured")
+    
+    # Load vector store
+    logger.info("Loading vector store...")
+    load_vector_store()
+    
+    yield
+    
+    # Shutdown
+    logger.info("Shutting down Career Copilot RAG API")
+
+
+# Create FastAPI app
 app = FastAPI(
-    title="Career Copilot RAG",
+    title="Career Copilot RAG API",
+    description="Production RAG-first API for career course recommendations",
     version="1.0.0",
-    description="Production-grade RAG Chat System with Mixtral 8x7B via Ollama"
+    lifespan=lifespan,
+    docs_url="/docs" if settings.is_development else None,  # Disable docs in prod
+    redoc_url="/redoc" if settings.is_development else None,
 )
 
-# Startup: Ensure DB Tables Exist
-from app.db import engine, Base
-# Import models to ensure they are registered with Base
-from app.models import ChatSession, ChatMessage
+# CORS configuration
+if settings.is_production:
+    # Strict CORS in production
+    allowed_origins = [settings.vite_api_base_url]
+else:
+    # Permissive CORS in development
+    allowed_origins = ["*"]
 
-@app.on_event("startup")
-def on_startup():
-    import logging
-    logger = logging.getLogger("uvicorn")
-    logger.info("Startup event triggered.")
-    logger.info(f"Engine URL: {engine.url}")
-    try:
-        # Create tables if they don't exist
-        Base.metadata.create_all(bind=engine)
-        logger.info("Base.metadata.create_all executed successfully.")
-    except Exception as e:
-        logger.error(f"Failed to create tables: {e}")
-
-# CORS Middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:5174",
-        "http://127.0.0.1:5174",
-        "http://localhost:5175",
-        "http://127.0.0.1:5175",
-        "http://localhost:5176",
-        "http://127.0.0.1:5176",
-    ],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Request Logging Middleware
-app.add_middleware(RequestLoggingMiddleware)
-
-# Exception Handlers
-app.add_exception_handler(StarletteHTTPException, http_exception_handler)
-app.add_exception_handler(RequestValidationError, validation_exception_handler)
-app.add_exception_handler(Exception, general_exception_handler)
-
-# API Routes
-app.include_router(health.router, prefix="/api/v1", tags=["health"])
-app.include_router(chat.router, prefix="/api/v1", tags=["chat"])
+# Register routes
+app.include_router(chat.router, tags=["Chat"])
+app.include_router(health.router, tags=["Health"])
+app.include_router(courses.router, prefix="/courses", tags=["Courses"])
+app.include_router(sessions.router, prefix="/sessions", tags=["Sessions"])
 
 
-# Serve Frontend Static Files
-import os
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+@app.get("/")
+async def root():
+    """Root endpoint."""
+    return {
+        "service": "Career Copilot RAG API",
+        "version": "1.0.0",
+        "environment": settings.app_env,
+        "status": "running"
+    }
 
-# Check if build directory exists
-FRONTEND_DIST = os.path.join(os.getcwd(), "frontend", "dist")
 
-if os.path.exists(FRONTEND_DIST):
-    # Mount assets (JS/CSS)
-    app.mount("/assets", StaticFiles(directory=os.path.join(FRONTEND_DIST, "assets")), name="assets")
-
-    # Serve Index for Root and SPA Routes
-    @app.get("/{full_path:path}")
-    async def serve_frontend(full_path: str):
-        # Allow API routes to pass through (already handled by routers above)
-        if full_path.startswith("api/") or full_path.startswith("docs") or full_path.startswith("redoc") or full_path.startswith("openapi.json"):
-             # If it falls through here, it means 404 on API
-             # But FastAPI router priority handles defined routes first.
-             # This catch-all is only if no other route matched.
-             raise StarletteHTTPException(status_code=404, detail="Not Found")
-
-        # Serve index.html for everything else (SPA)
-        return FileResponse(os.path.join(FRONTEND_DIST, "index.html"))
-
-else:
-    @app.get("/")
-    def root():
-        return {
-            "message": "Career Copilot RAG API (Frontend build not found)",
-            "tip": "Run 'npm run build' in frontend directory to serve UI here."
-        }
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(
+        "app.main:app",
+        host=settings.api_host,
+        port=settings.api_port,
+        reload=settings.is_development
+    )

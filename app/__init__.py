@@ -1,1 +1,1 @@
-# Career Copilot RAG Application
+# Empty __init__.py files for Python packages

@@ -1,188 +1,158 @@
-import uuid
-from sqlalchemy import (
-    Column, Integer, String, Float, DateTime, ForeignKey, Text,
-    CheckConstraint, UniqueConstraint, ARRAY, Index, func
-)
+"""
+Data models (Pydantic schemas and SQLAlchemy ORM).
+"""
+from pydantic import BaseModel, Field
+from sqlalchemy import Column, String, Text, DECIMAL, TIMESTAMP, Integer, Boolean
 from sqlalchemy.dialects.postgresql import UUID, JSONB
-from sqlalchemy.orm import relationship
-from sqlalchemy.ext.mutable import MutableDict
+from typing import Optional, List, Literal
+from datetime import datetime
+from app.database import Base
+import uuid
 
-from app.db import Base
 
-
-# -----------------------------
-# Core Catalog Tables
-# -----------------------------
+# ============================================================
+# SQLAlchemy ORM Models
+# ============================================================
 
 class Course(Base):
+    """Course catalog table."""
     __tablename__ = "courses"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    row_idx = Column(Integer, unique=True, nullable=False)
-
-    title = Column(Text, nullable=False)
-    description = Column(Text, nullable=True)
-    category = Column(Text, nullable=True)
-    level = Column(Text, nullable=True)
-
-    duration_hours = Column(Float, nullable=True)
-    skills = Column(Text, nullable=True)
-    instructor = Column(Text, nullable=True)
-    cover = Column(Text, nullable=True)
-    url = Column(Text, nullable=True)
-
-
-class SearchQuery(Base):
-    __tablename__ = "search_queries"
-
-    id = Column(Integer, primary_key=True, index=True)
-    raw_query = Column(Text, nullable=False)
-    normalized_query = Column(Text, nullable=True)
-
-    created_at = Column(DateTime, server_default=func.now(), nullable=False)
-
-
-class Plan(Base):
-    __tablename__ = "plans"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    query_id = Column(Integer, ForeignKey("search_queries.id"), nullable=True)
-
-    weeks = Column(Integer, nullable=False)
-    hours_per_week = Column(Float, nullable=False)
-
-    created_at = Column(DateTime, server_default=func.now(), nullable=False)
-
-    weeks_obj = relationship("PlanWeek", back_populates="plan", cascade="all, delete-orphan")
-    query = relationship("SearchQuery")
-
-
-class PlanWeek(Base):
-    __tablename__ = "plan_weeks"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    plan_id = Column(UUID(as_uuid=True), ForeignKey("plans.id"), nullable=False)
-    week_number = Column(Integer, nullable=False)
-
-    plan = relationship("Plan", back_populates="weeks_obj")
-    items = relationship("PlanItem", back_populates="week", cascade="all, delete-orphan")
-
-    __table_args__ = (
-        UniqueConstraint("plan_id", "week_number", name="uq_plan_week"),
-    )
-
-
-class PlanItem(Base):
-    __tablename__ = "plan_items"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    plan_week_id = Column(UUID(as_uuid=True), ForeignKey("plan_weeks.id"), nullable=False)
-    course_id = Column(UUID(as_uuid=True), ForeignKey("courses.id"), nullable=False)
-
-    order_in_week = Column(Integer, nullable=False)
-
-    week = relationship("PlanWeek", back_populates="items")
-    course = relationship("Course")
-
-    __table_args__ = (
-        UniqueConstraint("plan_week_id", "order_in_week", name="uq_week_order"),
-    )
+    
+    course_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    title = Column(String(500), nullable=False)
+    category = Column(String(200))
+    level = Column(String(50))
+    duration_hours = Column(DECIMAL(10, 2))
+    skills = Column(Text)
+    description = Column(Text)
+    instructor = Column(String(200))
+    cover = Column(Text)
+    created_at = Column(TIMESTAMP, default=datetime.utcnow)
+    updated_at = Column(TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class CourseEmbedding(Base):
+    """Course embeddings metadata table."""
     __tablename__ = "course_embeddings"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    course_id = Column(UUID(as_uuid=True), nullable=False)
+    embedding_model = Column(String(200), nullable=False)
+    chunk_text = Column(Text, nullable=False)
+    embedding_meta = Column("metadata", JSONB)  # Renamed attribute to avoid SQLAlchemy conflict
+    created_at = Column(TIMESTAMP, default=datetime.utcnow)
 
-    course_id = Column(UUID(as_uuid=True), ForeignKey("courses.id"), primary_key=True)
-    model_name = Column(Text, primary_key=True)
-
-    embedding = Column(ARRAY(Float), nullable=False)
-
-    created_at = Column(DateTime, server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
-
-
-# -----------------------------
-# Career Copilot Production Tables
-# -----------------------------
 
 class ChatSession(Base):
+    """Chat session table."""
     __tablename__ = "chat_sessions"
-
+    
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    title = Column(Text, nullable=True)
-
-    created_at = Column(DateTime, server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
-
-    # IMPORTANT: JSONB must be MutableDict to detect in-place updates
-    # IMPORTANT: default must be dict (callable), not {}
-    state = Column(MutableDict.as_mutable(JSONB), default=dict, nullable=False)
-
-    messages = relationship(
-        "ChatMessage",
-        back_populates="session",
-        cascade="all, delete-orphan",
-        passive_deletes=True,
-    )
-
-    __table_args__ = (
-        CheckConstraint("state IS NOT NULL", name="chk_chat_session_state_not_null"),
-    )
+    created_at = Column(TIMESTAMP, default=datetime.utcnow)
+    updated_at = Column(TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class ChatMessage(Base):
+    """Chat message logging table."""
     __tablename__ = "chat_messages"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-
-    session_id = Column(
-        UUID(as_uuid=True),
-        ForeignKey("chat_sessions.id", ondelete="CASCADE"),
-        nullable=False
-    )
-
-    role = Column(String, nullable=False)
-    content = Column(Text, nullable=False)
-
-    # JSONB fields: MutableDict to detect in-place updates, default=dict if you ever set them
-    intent_json = Column(MutableDict.as_mutable(JSONB), nullable=True)
-    plan_output_json = Column(MutableDict.as_mutable(JSONB), nullable=True)
-
-    created_at = Column(DateTime, server_default=func.now(), nullable=False)
-
-    session = relationship("ChatSession", back_populates="messages")
-
-    __table_args__ = (
-        Index("idx_chat_messages_session_created", "session_id", "created_at"),
-        # Optional but recommended constraint to avoid junk roles:
-        CheckConstraint("role IN ('user','assistant','system')", name="chk_chat_messages_role_valid"),
-    )
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    session_id = Column(UUID(as_uuid=True), nullable=True)  # Optional link to session
+    request_id = Column(UUID(as_uuid=True), default=uuid.uuid4)
+    role = Column(String(20), nullable=False)  # "user" or "assistant"
+    content = Column(Text, nullable=False)  # Actual message content
+    user_message_hash = Column(String(64))
+    intent = Column(String(50))
+    retrieved_course_count = Column(Integer)
+    response_length = Column(Integer)
+    latency_ms = Column(Integer)
+    error_occurred = Column(Boolean, default=False)
+    error_type = Column(String(100))
+    created_at = Column(TIMESTAMP, default=datetime.utcnow)
 
 
-class UserMemory(Base):
-    __tablename__ = "user_memory"
+# ============================================================
+# Pydantic Schemas (API Request/Response)
+# ============================================================
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), nullable=False)
+class CourseSchema(BaseModel):
+    """Course response schema."""
+    course_id: str
+    title: str
+    category: Optional[str] = None
+    level: Optional[str] = None
+    duration_hours: Optional[float] = None
+    skills: Optional[str] = None
+    description: Optional[str] = None
+    instructor: Optional[str] = None
+    cover: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
 
-    key = Column(String, nullable=False)
-    value = Column(MutableDict.as_mutable(JSONB), nullable=False)
 
-    created_at = Column(DateTime, server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+class RouterOutput(BaseModel):
+    """Router intent classification output with scope gating."""
+    in_scope: bool
+    intent: Literal[
+        "COURSE_DETAILS",
+        "SEARCH",
+        "CAREER_GUIDANCE",
+        "PLAN_REQUEST",
+        "OUT_OF_SCOPE",
+        "UNSAFE",
+        "SUPPORT_POLICY"
+    ]
+    target_categories: List[str] = Field(default_factory=list)
+    course_title_candidate: Optional[str] = None
+    goal_role: Optional[str] = None
+    keywords: List[str] = Field(default_factory=list)
+    user_language: Literal["ar", "en", "mixed"] = "ar"
 
-    __table_args__ = (
-        UniqueConstraint("user_id", "key", name="uq_user_memory_key"),
-    )
+
+class ChatRequest(BaseModel):
+    """Chat endpoint request."""
+    session_id: Optional[str] = None
+    message: str = Field(..., min_length=1, max_length=500)
 
 
-class SavedPlan(Base):
-    __tablename__ = "saved_plans"
+class CourseDetail(BaseModel):
+    """Course detail in response."""
+    course_id: str
+    title: str
+    level: Optional[str] = None
+    category: Optional[str] = None
+    instructor: Optional[str] = None
+    duration_hours: Optional[float] = None
+    description: Optional[str] = None
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    session_id = Column(UUID(as_uuid=True), ForeignKey("chat_sessions.id"), nullable=True)
 
-    plan_data = Column(MutableDict.as_mutable(JSONB), nullable=False)
-    version = Column(Integer, default=1, nullable=False)
+class ErrorDetail(BaseModel):
+    """Error detail object."""
+    code: str
+    message: str
 
-    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+class ChatResponse(BaseModel):
+    """Chat endpoint response (master prompt API contract)."""
+    session_id: str
+    intent: str
+    answer: str
+    courses: List[CourseDetail] = Field(default_factory=list)
+    error: Optional[ErrorDetail] = None
+    request_id: str
+
+
+class ErrorResponse(BaseModel):
+    """Error response."""
+    error: str
+    detail: Optional[str] = None
+
+
+class HealthResponse(BaseModel):
+    """Health check response."""
+    status: Literal["ok", "degraded"]
+    database: Literal["connected", "error"]
+    groq_api_key: Literal["configured", "missing"]
+    vector_store: Literal["loaded", "not_loaded"]
+    course_count: int = 0
