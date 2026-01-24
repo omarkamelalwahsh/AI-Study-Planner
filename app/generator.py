@@ -14,21 +14,18 @@ logger = logging.getLogger(__name__)
 # ============================================================
 # 1) GUIDANCE PLANNER PROMPT (Layer 2)
 # ============================================================
-GUIDANCE_PLANNER_PROMPT = """You are the Career Guidance Planner (Stage 1: Understanding & Guidance).
-
-Input:
-- user_question
-- router_output (intent, user_goal, target_role, thinking)
+GUIDANCE_PLANNER_PROMPT = """You are the Guidance Planner. 
+Your goal is to provide conceptual career advice without mentioning specific courses.
 
 Task:
-- Provide high-level, actionable career guidance tailored to the user's goal.
-- Focus strictly on professional steps, habits, and domain-specific advice.
-- You must NEVER mention any course names or specific catalog items here.
-- Stage 1 is about conceptual guidance only.
+- Write a concise plan (3-5 bullets) to reach the user's goal.
+- Focus on professional steps, habits, and domain-specific advice.
+- Do NOT mention any course names or catalog availability.
+- Mirror the user's language.
 
 Output JSON only:
 {
-  "guidance_intro": "Professional 1-2 sentence overview in user's language.",
+  "guidance_intro": "Professional 1-2 sentence overview.",
   "core_areas": [
     {"area": "string", "why_it_matters": "string", "actions": ["list", "of", "actions"] }
   ]
@@ -38,30 +35,70 @@ Output JSON only:
 # ============================================================
 # 2) FINAL RESPONSE RENDERER PROMPT (Layer 6)
 # ============================================================
-FINAL_RENDERER_PROMPT = """You are the Career Guidance Renderer (Stage 4: Final Rendering).
+FINAL_RENDERER_PROMPT = """You are the Career Guidance Renderer (Final Rendering).
 
-Input:
+You receive:
 - user_question
-- guidance_plan (intro + core_areas from Stage 1)
-- grounded_courses (courses actually found in catalog)
+- guidance_plan
+- grounded_courses (already retrieved from catalog)
 - coverage_note (optional)
 - language
 
-ABSOLUTE RULES:
-1) CATALOG IS THE SINGLE SOURCE OF TRUTH: Never invent or hallucinate courses. Suggest ONLY what is in 'grounded_courses'.
-2) NO FORCED MAPPING: If 'grounded_courses' is empty, honestly state that no relevant courses exist in the current catalog.
-3) HONESTY: If the catalog lacks coverage, provide guidance conceptually but DO NOT fill gaps with unrelated content.
-4) NO FAILURE LEAKAGE: Never say "No courses found for X". Handle gaps gracefully.
-5) DUAL ROLE (COURSE + SKILL): If only ONE relevant course exists, present it once and expand on why it's valuable.
+STRICT RULES:
+1) Use ONLY grounded_courses. Never invent courses or external resources.
+2) Do NOT “justify” irrelevant courses. If a course does not clearly help with the user's goal, exclude it from the response.
+3) If grounded_courses is empty after filtering, say the catalog currently has no relevant courses ONCE, then provide conceptual guidance only.
+4) Never show internal errors or "No courses found for X".
+5) If only one relevant course exists, show it once and list the key areas it supports.
 
-Presentation:
+RELEVANCE TEST:
+Include a course only if a professional pursuing this goal would reasonably benefit from it.
+
+PRESENTATION:
 - Mirror user language.
-- Guidance Intro + top bullets first.
-- Group courses by category.
-- If too many courses (>10), paginate/truncate with "More available".
+- Start with guidance (short).
+- Then list courses grouped by category.
+- It is OK to list many courses as long as all are clearly relevant.
+- If too many (>20 total), show first 10 per category and say "يوجد المزيد" / "More available".
 
-OUTPUT: User-facing text only.
+Output: user-facing text only.
 """
+
+def _relevance_gate(user_question: str, courses: List[Dict]) -> List[Dict]:
+    """Deterministic filter to remove domain-mismatched noise."""
+    q = (user_question or "").lower()
+
+    # Lightweight role/domain inference from question
+    technical = any(x in q for x in [
+        "data scientist", "data science", "machine learning", "ml", "ai",
+        "backend", "frontend", "developer", "engineer", "python", "sql",
+        "علم البيانات", "ذكاء", "تعلم الآلة", "برمجة", "بايثون", "داتاساينس"
+    ])
+    manager = any(x in q for x in [
+        "manager", "lead", "leadership", "مدير", "قيادة", "إدارة", "تيم", "فريق"
+    ])
+
+    # Hard reject lists (high-signal, avoid false positives)
+    reject_if_manager = ["mysql", "html", "css", "javascript", "react", "adobe", "after effects", "illustrator", "indesign"]
+    reject_if_technical = ["hygiene", "renewable energy", "after effects", "illustrator", "indesign", "graphic design", "social media marketing"]
+
+    filtered = []
+    for c in courses:
+        title = (c.get("title") or "").lower()
+        category = (c.get("category") or "").lower()
+        blob = f"{title} {category}"
+
+        # Manager: reject tool-specific technical/design noise
+        if manager and any(k in blob for k in reject_if_manager):
+            continue
+
+        # Technical role: reject obvious non-tech noise
+        if technical and any(k in blob for k in reject_if_technical):
+            continue
+
+        filtered.append(c)
+
+    return filtered
 
 from datetime import datetime
 
@@ -85,8 +122,8 @@ def generate_guidance_plan(
             "intent": router_output.intent,
             "user_goal": router_output.user_goal,
             "target_role": router_output.target_role,
-            "language": router_output.user_language,
-            "thinking": router_output.thinking
+            "role_type": router_output.role_type,
+            "language": router_output.user_language
         }
     }
     
@@ -122,7 +159,10 @@ def generate_final_response(
     """Layer 6: Generate final user-facing text."""
     client = Groq(api_key=settings.groq_api_key)
     
-    # Clean course data for LLM context (keep only what's needed for the prompt)
+    # 1. Deterministic Relevance Gate (Safety Barrier)
+    grounded_courses = _relevance_gate(user_question, grounded_courses)
+    
+    # 2. Clean course data for LLM context
     clean_courses = []
     for c in grounded_courses:
         clean_courses.append({

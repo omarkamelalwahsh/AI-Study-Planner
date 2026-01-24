@@ -101,50 +101,24 @@ def _default_category_from_anchors(user_question: str) -> str:
 # -----------------------
 # 1) Router Prompt (app/router.py)
 # -----------------------
-_ROUTER_SYSTEM_PROMPT = """You are the Career Copilot Router. Your goal is to be precise, logical, and respect professional boundaries.
-
-CORE AUTHORITY:
-- You must respect the professional domain of user roles. Technical roles (e.g. Data Scientist, Developer) should ONLY be mapped to technical categories.
-- Reject requests outside of career, learning, or professional development.
-
-Task:
-1. Analyze the user's question and identify the core skills required.
-2. Formulate a 'thinking' process: explain which skills are needed and why you are choosing specific categories based on ONLY relevant domains.
-3. If a question bridges multiple categories, you MUST select ONLY the SINGLE category that matches the MOST CRITICAL skill required.
-4. Determine:
-   - intent: one of [career_guidance, course_lookup, skill_lookup, category_browse, chit_chat, admin]
-   - user_goal: short statement
-   - target_role: (optional)
-   - language: [ar, en, mixed]
-   - thinking: your step-by-step reasoning for categorization and domain authority.
-   - in_scope: true if related to career/learning.
+_ROUTER_SYSTEM_PROMPT = """You are the Router. Your only job is intent classification and extracting minimal routing metadata.
 
 Rules:
-- Typos (e.g., 'gow' -> 'how'): Correct silently.
-- "How to become X" => career_guidance.
-- DO NOT mention course names or list skills here.
-- Strictly map to ALLOWED_CATEGORIES.
+- Do NOT generate guidance, skills, courses, or availability statements.
+- Correct obvious typos silently (e.g. 'gow' -> 'how').
+- Mirror detected language in 'language' field.
+- For technical goals (Data Scientist, ML, Backend, Python, etc.), set role_type="technical".
+- Do NOT restrict retrieval to a single category. Set search_scope="ALL_CATEGORIES".
 
 Return JSON only:
 {
-  "thinking": "Your reasoning following Role & Domain Authority...",
-  "intent": "...",
-  "user_goal": "...",
-  "target_role": "...",
-  "language": "...",
-  "needs_clarification": false,
-  "clarification_question": "",
-  "target_categories": [],
-  "in_scope": true,
-  "keywords": []
+  "intent": "career_guidance|course_lookup|skill_lookup|category_browse|chit_chat",
+  "user_goal": "short",
+  "target_role": "short or empty",
+  "role_type": "technical|non_technical|mixed",
+  "language": "ar|en|mixed",
+  "search_scope": "ALL_CATEGORIES"
 }
-
-Detailed Intent Map:
-- career_guidance: Roadmap for roles, "How to become...", "Skills for X"
-- course_lookup: Specific course titles.
-- skill_lookup: Learning a specific topic (e.g. "Learn Python").
-- category_browse: "Show all X courses".
-- chit_chat: General greetings/thanks.
 """
 
 class GroqUnavailableError(Exception):
@@ -165,11 +139,9 @@ def classify_intent(user_question: str) -> RouterOutput:
     
     # 2. Fast Path for Availability
     if len(q_strip) <= 80 and _AVAIL_RE.search(q_strip):
-         # Typically course lookup
          return RouterOutput(
             in_scope=True,
-            intent="AVAILABILITY_CHECK", # Maps to SEARCH internally usually
-            target_categories=[_default_category_from_anchors(q_strip)],
+            intent="AVAILABILITY_CHECK",
             user_language=lang,
             keywords=_extract_keywords_fallback(q_strip)
         )
@@ -192,8 +164,8 @@ def classify_intent(user_question: str) -> RouterOutput:
                     {"role": "system", "content": _ROUTER_SYSTEM_PROMPT},
                     {"role": "user", "content": router_input}
                 ],
-                temperature=0.0,
-                max_tokens=350,
+                temperature=0.2, # Low temperature for classification
+                max_tokens=300,  # Minimal tokens for minimal output
                 timeout=settings.groq_timeout_seconds,
                 response_format={"type": "json_object"}
             )
@@ -206,28 +178,23 @@ def classify_intent(user_question: str) -> RouterOutput:
             mapped_intent = "SEARCH" # Default
             
             if raw_intent == "career_guidance": mapped_intent = "CAREER_GUIDANCE"
-            elif raw_intent == "course_lookup": mapped_intent = "COURSE_DETAILS" # Or SKILL_SEARCH depending on specificity
+            elif raw_intent == "course_lookup": mapped_intent = "COURSE_DETAILS"
             elif raw_intent == "skill_lookup": mapped_intent = "SKILL_SEARCH"
             elif raw_intent == "category_browse": mapped_intent = "CATEGORY_BROWSE"
-            elif raw_intent == "chit_chat": mapped_intent = "GREETING"
-            elif raw_intent == "admin": mapped_intent = "SUPPORT_POLICY"
-            
-            # Adjust mapping if user asks for generic course lookup -> SKILL_SEARCH
-            # The user spec differentiates course_lookup vs skill_lookup.
-            # We map consistent with app/models.py
+            elif raw_intent in ["chit_chat", "greeting"]: mapped_intent = "GREETING"
             
             out = RouterOutput(
-                in_scope=data.get("in_scope", True),
+                in_scope=True,
                 intent=mapped_intent.upper() if mapped_intent.upper() in ["CAREER_GUIDANCE", "GREETING", "FOLLOW_UP", "AVAILABILITY_CHECK", "COURSE_DETAILS", "SKILL_SEARCH", "CATEGORY_BROWSE"] else "SKILL_SEARCH",
-                target_categories=data.get("target_categories", []),
                 user_language=data.get("language", lang),
                 user_goal=data.get("user_goal"),
                 target_role=data.get("target_role"),
-                thinking=data.get("thinking"),
+                role_type=data.get("role_type", "non_technical"),
+                search_scope=data.get("search_scope", "ALL_CATEGORIES"),
                 keywords=data.get("keywords", []) or _extract_keywords_fallback(q_strip)
             )
             
-            logger.info("Router: intent=%s role=%s goal=%s", out.intent, out.target_role, out.user_goal)
+            logger.info("Router: intent=%s role=%s goal=%s scope=%s", out.intent, out.target_role, out.user_goal, out.search_scope)
             return out
             
         except Exception as e:

@@ -114,12 +114,14 @@ class RouterOutput(BaseModel):
     english_search_term: Optional[str] = None
     
     # New fields for 7-step pipeline
+    # Minimal routing metadata
     user_goal: Optional[str] = None
     target_role: Optional[str] = None
-    thinking: Optional[str] = None
+    role_type: Literal["technical", "non_technical", "mixed"] = "non_technical"
+    user_language: Literal["ar", "en", "mixed"] = "ar"
+    search_scope: Literal["ALL_CATEGORIES", "CATEGORY_RESTRICTED"] = "ALL_CATEGORIES"
     
     keywords: List[str] = Field(default_factory=list)
-    user_language: Literal["ar", "en", "mixed"] = "ar"
 
 
 class ChatRequest(BaseModel):

@@ -52,30 +52,35 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
         grounded_courses = []
         coverage_note = None
         
-        # --- PATH A: CAREER GUIDANCE (The 7-Step Flow) ---
+        # --- PATH A: CAREER GUIDANCE (The 7-Step Multi-Layer Flow) ---
         if intent == "CAREER_GUIDANCE":
-            # Step 2: Guidance Planner
+            # Step 2: Guidance Planner (Stage 1)
             guidance_plan = generate_guidance_plan(message, router_out)
             
-            # Step 3: Skill Extractor
+            # Step 3: Skill Extractor (Stage 2)
             skills_data = extract_skills_and_areas(message, guidance_plan.get("core_areas", []), router_out.target_role)
             
-            # Guardrail: If no skills found?
-            if not skills_data.get("skills_or_areas"):
-                logger.warning("No skills extracted for career guidance.")
-                # We might want to fallback to simple keyword search or just proceed with empty
+            # Step 4: Simple Search Plan (Deterministic)
+            search_plan = {
+                "plan": [
+                    {
+                        "canonical_en": s.get("canonical_en"),
+                        "primary_queries": [s.get("canonical_en")] + (s.get("queries") if s.get("queries") else []),
+                        "limit_per_query": 5
+                    } for s in skills_data.get("skills_or_areas", [])
+                ]
+            }
             
-            # Step 4: Retrieval Controller
-            search_plan = await generate_search_plan(skills_data)
+            # Step 5 & 6: Execute Search
+            # Use search_scope to decide if we filter by category (Hints only if search_scope is ALL_CATEGORIES)
+            grounded_courses, skill_map = await execute_and_group_search(
+                db, 
+                search_plan, 
+                target_categories=None if router_out.search_scope == "ALL_CATEGORIES" else router_out.target_categories
+            )
             
-            # Step 5 & 6: Execute Search & Group
-            grounded_courses, skill_map = await execute_and_group_search(db, search_plan)
-            
-            # Coverage Note Logic
-            # If we found nothing for some skills, maybe add a note?
-            # The user asked: "If the total courses are very large... If no relevant courses... provide guidance only + note"
             if not grounded_courses:
-                coverage_note = "No relevant courses in current catalog."
+                coverage_note = "Our current catalog lacks direct matches for these specific skills."
 
         # --- PATH B: STANDARD SEARCH / OTHER ---
         else:

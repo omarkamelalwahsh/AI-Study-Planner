@@ -53,19 +53,18 @@ def _canonical_variants(query: str) -> List[str]:
     if not q0:
         return []
     toks = _tokenize(q0)
+    # Preservation: Keep tokens >= 2 chars (crucial for AI, ML, SQL)
     cleaned = [t for t in toks if t.lower() not in _AR_NOISE and len(t) >= 2]
+    
     cleaned_q = " ".join(cleaned).strip()
 
-    # best single token (prefer latin)
-    latin = [t for t in cleaned if re.search(r"[A-Za-z]", t)]
-    best = max(latin, key=len) if latin else (max(cleaned, key=len) if cleaned else "")
-
     variants = []
-    for v in [q0, cleaned_q, best]:
+    # Use both full and cleaned version for better coverage
+    for v in [cleaned_q, q0]:
         v = _normalize_text(v)
-        if v and v not in variants:
+        if v and len(v) >= 2 and v not in variants:
             variants.append(v)
-    return variants[:4]
+    return variants[:3]
 
 def _e5_query(text: str) -> str:
     return f"query: {text}"
@@ -359,55 +358,52 @@ async def generate_search_plan(skills_data: Dict) -> Dict:
 
 async def execute_and_group_search(
     db: AsyncSession,
-    search_plan: Dict
+    search_plan: Dict,
+    target_categories: Optional[List[str]] = None
 ) -> Tuple[List[Dict], Dict[str, List[Dict]]]:
     """
-    Layers 5 & 6: Execute search plan, dedupe, and group courses.
-    Returns (deduped_courses_dicts, skill_to_courses_map)
+    Precision + Recall implementation:
+    - No direct category filtering (Avoids Choking)
+    - Executes Primary + Fallback queries
+    - Strong deduplication
     """
-    deduped_map = {} # course_id -> course_dict
-    skill_map = {}   # skill_en -> list of course_dicts
+    deduped_map = {}
+    skill_map = {}
     
     plan_items = search_plan.get("plan", [])
+    seen_queries = set()
     
     for item in plan_items:
         skill_en = item.get("canonical_en")
-        queries = item.get("primary_queries", [])
-        limit = item.get("limit_per_query", 10)
+        # Combine primary and fallback
+        primary = item.get("primary_queries", [])
+        fallback = item.get("fallback_queries", [])
         
-        # Execute search for this skill
-        found_courses = []
-        for q in queries:
-            # We assume retrieve_courses handles semantic + keyword internally
-            # For strictness, higher precision logic should be here, but using existing retrieval for now.
-            courses = await retrieve_courses(db, q, top_k=limit)
-            found_courses.extend(courses)
-            
-        # Fallback if needed? (Skipped for speed unless empty)
-        if not found_courses and item.get("fallback_queries"):
-             for q in item.get("fallback_queries", []):
-                courses = await retrieve_courses(db, q, top_k=limit)
-                found_courses.extend(courses)
+        # Merge without duplicates
+        all_queries = []
+        for q in (primary + fallback):
+            if q and q not in seen_queries:
+                all_queries.append(q)
+                seen_queries.add(q)
 
+        limit = item.get("limit_per_query", 5)
         skill_map[skill_en] = []
         
-        for c in found_courses:
-            cid = str(c.course_id)
-            c_dict = c.dict() if hasattr(c, "dict") else c.__dict__
+        for q in all_queries:
+            # NO category filters here to prevent choking catalog results
+            courses = await retrieve_courses(db, q, top_k=limit, filters=None)
             
-            # Enrich with supported skills
-            if cid not in deduped_map:
-                c_dict["supported_skills"] = [skill_en]
-                deduped_map[cid] = c_dict
-            else:
-                if skill_en not in deduped_map[cid]["supported_skills"]:
-                    deduped_map[cid]["supported_skills"].append(skill_en)
-            
-            # Add to skill map (referencing the SAME dict object in deduped_map to keep synced)
-            skill_map[skill_en].append(deduped_map[cid])
+            for c in courses:
+                cid = str(c.course_id)
+                if cid not in deduped_map:
+                    c_dict = c.dict() if hasattr(c, "dict") else c.__dict__
+                    c_dict["supported_skills"] = [skill_en]
+                    deduped_map[cid] = c_dict
+                else:
+                    if skill_en not in deduped_map[cid]["supported_skills"]:
+                        deduped_map[cid]["supported_skills"].append(skill_en)
+                
+                skill_map[skill_en].append(deduped_map[cid])
 
-    # Convert values to list
-    all_courses = list(deduped_map.values())
-    
-    return all_courses, skill_map
+    return list(deduped_map.values()), skill_map
 

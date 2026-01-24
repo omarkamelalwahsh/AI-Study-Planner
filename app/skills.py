@@ -14,31 +14,31 @@ logger = logging.getLogger(__name__)
 # ============================================================
 # 3) SKILL/AREA EXTRACTOR PROMPT (Layer 3)
 # ============================================================
-SKILL_EXTRACTOR_PROMPT = """You are the Skill & Area Extractor (Stage 2: Identification).
+SKILL_EXTRACTOR_PROMPT = """You generate search queries for the internal course catalog.
 
-Input:
-- user_question
-- guidance_plan_areas (list of core areas from Stage 1)
-- target_role
-
-Task:
-1) Identify ALL relevant skills or professional areas implied by the user's career goal.
-2) This is an exploratory stage: do NOT judge whether a skill has courses yet.
-3) Convert them into searchable units: canonical_en, label_ar, synonyms, and at least 6 diverse search queries.
+Goal:
+Find ALL courses that genuinely help with the user's goal, without pulling unrelated courses.
 
 Rules:
-- Respect Role & Domain Authority: Focus ONLY on skills within the professional domain of the target role.
-- Prefer high-level "areas" (e.g. "Cloud Architecture") over narrow tools (e.g. "AWS Console") unless critical.
-- Maximum 5 units total.
+1) Produce 8–12 skills/areas maximum, but cover all aspects of the user's goal.
+2) For each skill/area generate:
+   - 2 high-precision queries (exact phrases)
+   - 2 medium queries (common variants)
+   - 2 recall queries (broader synonyms)
+3) Queries must be multilingual when useful:
+   - Arabic + English variants
+   - Include common abbreviations: DS, ML, AI, SQL, Python
+4) Avoid generic single words that cause noise (e.g., "advanced", "fundamentals", "principles") unless tied to the role domain.
+5) Do NOT decide whether courses exist. Only produce queries.
 
-Return JSON only:
+Output JSON only:
 {
   "skills_or_areas": [
     {
       "canonical_en": "string",
       "label_ar": "string",
-      "synonyms": ["string"],
-      "queries": ["q1", "q2", "q3", "q4", "q5", "q6"]
+      "primary_queries": ["query1", "query2", "query3", "query4"],
+      "fallback_queries": ["query5", "query6"]
     }
   ]
 }
