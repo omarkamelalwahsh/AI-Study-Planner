@@ -1,68 +1,82 @@
 """
 skills.py
-Module for extracting and translating skills from user input (Role Definition) -> English Skills.
-This helps the RAG system find relevant courses even if the user asks in Arabic or describes a role.
+Module for extracting searchable skills from user input + guidance plan.
+Layer 3 of the 7-step pipeline: Extractor.
 """
 import logging
 import json
-from typing import List
+from typing import List, Dict, Any
 from groq import Groq
 from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-HYPOTHESIS_PROMPT = """
-Given the user message, do the following:
+# ============================================================
+# 3) SKILL/AREA EXTRACTOR PROMPT (Layer 3)
+# ============================================================
+SKILL_EXTRACTOR_PROMPT = """You are the Skill & Area Extractor.
 
-A) Skill Hypotheses (free reasoning allowed):
-- Extract a list of "skill hypotheses" relevant to the user request.
-- For each hypothesis, create:
-  - skill_label_ar (Arabic)
-  - skill_label_en (English)
-  - lookup_queries: a list of candidate strings to search in the dataset keys (include variations, synonyms, plural/singular, common phrasing).
+Input:
+- user_question
+- guidance_plan_areas (list of strings/objects)
+- target_role (if any)
 
-B) Output:
-Return JSON with:
-- user_intent: short label
-- hypotheses: list of hypotheses (with lookup_queries)
+Task:
+1) Extract ALL relevant skills/areas implied by the user_question + guidance_plan.
+2) Convert them into searchable units:
+   - canonical_en (English)
+   - label_ar (Arabic)
+   - synonyms (mixed language allowed)
+   - queries (at least 6 per skill/area): exact phrase, variants, synonyms, plural/singular, common phrasing.
 
 Rules:
-1. **Focus on Technical/Hard Skills** likely to be in a course catalog (e.g. "Python", "Project Management").
-2. **Exclude GENERIC Soft Skills** (e.g. "Creativity", "Passion") unless role is HR/Soft Skills.
+- Do NOT decide whether a skill has courses.
+- Avoid filler generic skills unless clearly relevant.
+- Prefer "areas" over single-word skills when possible (e.g. "Data Visualization" vs "Graph").
+- Keep count: 3 to 5 items max (be very selective).
 
-Input: "{user_input}"
+Return JSON only:
 
-Output Schema:
 {
-  "user_intent": "string",
-  "hypotheses": [
+  "skills_or_areas": [
     {
-      "skill_label_ar": "string",
-      "skill_label_en": "string",
-      "lookup_queries": ["string", "string"]
+      "canonical_en": "string",
+      "label_ar": "string",
+      "synonyms": ["string", "string"],
+      "queries": ["string", "string", "string", "string", "string", "string"]
     }
   ]
 }
 """
 
-def extract_skill_hypotheses(user_input: str) -> dict:
+def extract_skills_and_areas(
+    user_question: str,
+    guidance_plan_areas: List[Dict],
+    target_role: str = None
+) -> Dict[str, Any]:
     """
-    Returns dict with 'hypotheses' list containing lookup queries.
+    Layer 3: Extract searchable skills/areas from input + plan.
     """
-    if not user_input or len(user_input.strip()) < 2:
-        return {"hypotheses": []}
-        
     client = Groq(api_key=settings.groq_api_key)
     
+    # Prepare minimal context for the prompt
+    # guidance_plan_areas is expected to be list of core_areas objects from layer 2
+    
+    input_context = {
+        "user_question": user_question,
+        "guidance_plan_areas": [a.get("area") for a in guidance_plan_areas if a.get("area")],
+        "target_role": target_role
+    }
+
     try:
         completion = client.chat.completions.create(
             model=settings.groq_model,
             messages=[
-                {"role": "system", "content": HYPOTHESIS_PROMPT.replace("{user_input}", user_input)},
-                {"role": "user", "content": "Generate hypotheses JSON."} 
+                {"role": "system", "content": SKILL_EXTRACTOR_PROMPT},
+                {"role": "user", "content": json.dumps(input_context, ensure_ascii=False)}
             ],
             temperature=0.0,
-            max_tokens=512,
+            max_tokens=1000,
             response_format={"type": "json_object"},
             timeout=settings.groq_timeout_seconds
         )
@@ -72,71 +86,12 @@ def extract_skill_hypotheses(user_input: str) -> dict:
         return data
         
     except Exception as e:
-        logger.error(f"[SkillExtraction] Failed: {e}")
-        return {"hypotheses": []}
+        logger.error(f"[SkillExtractor] Failed: {e}")
+        # Return empty struct so pipeline doesn't crash, 
+        # Retrieval will fail naturally if no skills found.
+        return {"skills_or_areas": []}
 
-# Simple wrapper for backward compatibility if needed, though we will refactor chat.py
-def extract_skills_structured(user_input: str) -> List[str]:
-    # Legacy wrapper - just returns EN labels
-    data = extract_skill_hypotheses(user_input)
-    hyps = data.get("hypotheses", [])
-    return [h.get("skill_label_en") for h in hyps if h.get("skill_label_en")]
+# Backward compatibility alias (if we don't fully refactor chat.py imports immediately)
+# But we plan to refactor chat.py, so this is just safety.
+analyze_career_request = extract_skills_and_areas 
 
-
-CAREER_ANALYSIS_PROMPT = """
-Analyze the user's career guidance request.
-
-Input: "{user_input}"
-
-Goal:
-1. Detect and correct any typos in the role (e.g., "god leader" -> "good leader").
-2. Identify the **Target Role** (Corrected).
-3. Identify 4-6 **Broad Skill Areas** required for this role.
-4. For each area, generate **at least 4 search queries** (English/Arabic synonyms, specific terms, variants).
-
-Output JSON:
-{
-  "correction": "String showing assumption if typo found (e.g. 'I assume you meant...') or null",
-  "target_role": "string",
-  "skill_areas": [
-    {
-      "area_name": "string (Title Case)",
-      "search_keywords": ["query1", "query2", "query3", "query4..."]
-    }
-  ]
-}
-
-Rules:
-- Areas must be broad enough to map to multiple courses.
-- Search keywords must include: exact phrase, common variant, synonym, and a broader phrase.
-"""
-
-def analyze_career_request(user_input: str) -> dict:
-    """
-    Analyzes career request to get Role + Broad Areas + Typo Correction.
-    """
-    if not user_input or len(user_input.strip()) < 2:
-        return {"target_role": "Professional", "skill_areas": []}
-
-    client = Groq(api_key=settings.groq_api_key)
-    
-    try:
-        completion = client.chat.completions.create(
-            model=settings.groq_model,
-            messages=[
-                {"role": "system", "content": CAREER_ANALYSIS_PROMPT.replace("{user_input}", user_input)},
-                {"role": "user", "content": "Analyze career request."} 
-            ],
-            temperature=0.0,
-            max_tokens=512,
-            response_format={"type": "json_object"},
-            timeout=settings.groq_timeout_seconds
-        )
-        
-        content = completion.choices[0].message.content
-        data = json.loads(content)
-        return data
-        
-    except Exception as e:
-        logger.error(f"[CareerAnalysis] Failed: {e}")
-        return {"target_role": "Professional", "skill_areas": []}

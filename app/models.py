@@ -112,7 +112,11 @@ class RouterOutput(BaseModel):
     target_categories: List[str] = Field(default_factory=list)
     course_title_candidate: Optional[str] = None
     english_search_term: Optional[str] = None
-    goal_role: Optional[str] = None
+    
+    # New fields for 7-step pipeline
+    user_goal: Optional[str] = None
+    target_role: Optional[str] = None
+    
     keywords: List[str] = Field(default_factory=list)
     user_language: Literal["ar", "en", "mixed"] = "ar"
 

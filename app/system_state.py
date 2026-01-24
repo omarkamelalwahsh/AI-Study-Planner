@@ -138,3 +138,12 @@ def build_system_state(
 
     logger.debug("system_state built intent=%s returned=%d", routing.intent, len(catalog_context))
     return state
+
+GUARDRAILS = """
+GUARDRAILS:
+- The LLM may propose skills/areas and search queries only.
+- Course availability is determined strictly by retrieval results.
+- The renderer must not mention internal failure states.
+- No external course suggestions are allowed.
+- If retrieval returns zero courses overall, provide guidance only + one coverage note: "No relevant courses in current catalog."
+"""

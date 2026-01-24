@@ -98,66 +98,45 @@ def _default_category_from_anchors(user_question: str) -> str:
 # -----------------------
 # Router prompt
 # -----------------------
-_ROUTER_SYSTEM_PROMPT = """You are the ROUTER for Career Copilot. Return JSON ONLY. Do not answer the user.
+# -----------------------
+# 1) Router Prompt (app/router.py)
+# -----------------------
+_ROUTER_SYSTEM_PROMPT = """You are the Router.
 
-You receive:
-- USER_QUESTION
-- ALLOWED_CATEGORIES (exact list)
-
-Return JSON:
-{
-  "user_language": "en|ar|mixed",
-  "in_scope": true,
-  "intent": "GREETING|COURSE_DETAILS|SKILL_SEARCH|CATEGORY_BROWSE|AVAILABILITY_CHECK|FOLLOW_UP|CAREER_GUIDANCE|PLAN_REQUEST|SUPPORT_POLICY|UNSAFE|OUT_OF_SCOPE",
-  "target_categories": [],
-  "keywords": [],
-  "course_title_candidate": null
-}
+Decide:
+- intent: one of [career_guidance, course_lookup, skill_lookup, category_browse, chit_chat, admin]
+- user_goal: short statement
+- target_role (optional)
+- language: [ar, en, mixed]
+- needs_clarification: true/false (ONLY if absolutely necessary)
 
 Rules:
+- If the user message has typos but meaning is clear, silently correct.
+- If the user asks "how to become X" => career_guidance intent.
+- If user asks "course named X" or "عاوز كورس اسمه" => course_lookup.
+- "GREETING" maps to chit_chat.
+- Do NOT generate courses or skills lists here. Only routing.
 
-1) user_language: ar/en/mixed.
+Return JSON only:
 
-2) in_scope:
-- true if maps to allowed categories OR contains any STRONG ANCHOR below.
-- false only if clearly unrelated.
+{
+  "intent": "...",
+  "user_goal": "...",
+  "target_role": "...",
+  "language": "...",
+  "needs_clarification": false,
+  "clarification_question": "",
+  "target_categories": [],
+  "in_scope": true,
+  "keywords": []
+}
 
-STRONG ANCHORS:
-- Data Science / AI: data science, data scientist, machine learning, ml, deep learning, ai, علم بيانات, ذكاء اصطناعي
-- Programming: python, java, c++, c#, javascript, typescript, coding, programming, بايثون, برمجة
-- Web Development: html, css, react, node, frontend, backend, web, ويب, موقع
-- Mobile Development: android, ios, kotlin, swift, flutter, موبايل
-- Data Security: cybersecurity, security, privacy, سيبراني, امن معلومات
-- Networking: network, tcp, ccna, شبكات
-- Project Management: scrum, agile, pmp, إدارة مشاريع
-- Career Development: resume, cv, interview, portfolio, سيرة ذاتية
-- Technology Applications: excel, powerpoint, word, ويندوز, أوفيس
-- Business / Entrepreneurship: business, entrepreneur, startup, management, businessman, بيزنس, ريادة أعمال, إدارة
-
-If ANY anchor appears => in_scope=true.
-
-3) intent selection (EXACTLY ONE):
-- FOLLOW_UP: asks for more items ("هل في غيرهم", "any more", "show more").
-- AVAILABILITY_CHECK: asks if courses exist ("هل ليها كورسات", "do you have courses").
-- PLAN_REQUEST: asks for roadmap/schedule/timeframe ("خطة", "جدول", "weeks", "30 days").
-- CAREER_GUIDANCE (CRITICAL): required skills / first skill / become good at X:
-  Arabic: "المهارات المطلوبة", "ازاي أبقى شاطر", "محتاج أتعلم ايه", "ايه المهارات", "اول مهارة"
-  English: "skills required", "first skill", "how to become good", "what should I learn"
-  => intent=CAREER_GUIDANCE (NOT SKILL_SEARCH)
-- COURSE_DETAILS: details about a specific course title.
-- CATEGORY_BROWSE: broad category without skill/topic ("كورسات برمجة", "Programming courses").
-- SKILL_SEARCH: learn a specific skill/topic ("عاوز اتعلم Python", "كورسات SQL").
-- GREETING/SUPPORT_POLICY/UNSAFE/OUT_OF_SCOPE accordingly.
-
-4) target_categories:
-- If in_scope=true: output 1–3 categories from ALLOWED_CATEGORIES (never empty).
-- If in_scope=false: empty.
-
-5) keywords:
-- 3–10 high-signal terms only.
-- exclude Arabic stopwords: عايز، عاوز، اتعلم، تفاصيل، هل، في، عن، ازاي، ايه، اول، ممكن
-
-6) course_title_candidate only for COURSE_DETAILS, else null.
+Detailed Intent Map:
+- career_guidance: "How to become...", "Roadmap for...", "Skills needed for X", "azay ab2a X"
+- course_lookup: "Python course", "Course about X", "Do you have X course?"
+- skill_lookup: "Learn python", "Explain SQL", "What is rag?"
+- category_browse: "Programming courses", "Marketing courses"
+- chit_chat: "Hello", "Thanks", "Support"
 """
 
 class GroqUnavailableError(Exception):
@@ -167,45 +146,36 @@ def classify_intent(user_question: str) -> RouterOutput:
     q_strip = (user_question or "").strip()
     lang = _detect_lang(q_strip)
 
-    # 1) FOLLOW_UP fast-path (short queries عادة)
+    # 1. Fast Path for Follow-up
     if len(q_strip) <= 40 and _FOLLOW_UP_RE.search(q_strip):
-        return RouterOutput(
+         return RouterOutput(
             in_scope=True,
             intent="FOLLOW_UP",
-            target_categories=["General"],
-            course_title_candidate=None,
-            english_search_term=None,
-            goal_role=None,
-            keywords=_extract_keywords_fallback(q_strip) or ["more"],
-            user_language=lang
+            user_language=lang,
+             keywords=_extract_keywords_fallback(q_strip) or ["more"]
         )
-
-    # 2) AVAILABILITY fast-path (مهم جدًا مايتلخبطش)
+    
+    # 2. Fast Path for Availability
     if len(q_strip) <= 80 and _AVAIL_RE.search(q_strip):
-        # حاول تثبت category من anchors
-        cat = _default_category_from_anchors(q_strip)
-        return RouterOutput(
+         # Typically course lookup
+         return RouterOutput(
             in_scope=True,
-            intent="AVAILABILITY_CHECK",
-            target_categories=[cat],
-            course_title_candidate=None,
-            english_search_term=None,
-            goal_role=None,
-            keywords=_extract_keywords_fallback(q_strip),
-            user_language=lang
+            intent="AVAILABILITY_CHECK", # Maps to SEARCH internally usually
+            target_categories=[_default_category_from_anchors(q_strip)],
+            user_language=lang,
+            keywords=_extract_keywords_fallback(q_strip)
         )
 
+    # 3. LLM Routing
     client = Groq(api_key=settings.groq_api_key)
-
+    
     router_input = json.dumps({
         "USER_QUESTION": user_question,
         "ALLOWED_CATEGORIES": ALLOWED_CATEGORIES
     }, ensure_ascii=False)
 
     max_retries = settings.groq_max_retries
-    last_error = None
-    content = ""
-
+    
     for attempt in range(max_retries + 1):
         try:
             response = client.chat.completions.create(
@@ -219,128 +189,50 @@ def classify_intent(user_question: str) -> RouterOutput:
                 timeout=settings.groq_timeout_seconds,
                 response_format={"type": "json_object"}
             )
-
-            content = (response.choices[0].message.content or "").strip()
-            if content.startswith("```"):
-                content = content.replace("```json", "").replace("```", "").strip()
-
-            data = json.loads(content)
-
-            # enforce language fallback
-            data["user_language"] = data.get("user_language") or lang
-
-            # normalize categories
-            in_scope = bool(data.get("in_scope"))
-            cats = data.get("target_categories") or []
-            cats = [c for c in cats if c in ALLOWED_CATEGORIES]
-
-            # [FIX] Force in_scope if strong local anchor exists
-            # This protects against LLM being too strict or hallucinating scope
-            local_cat = _default_category_from_anchors(q_strip)
-            if local_cat != "General":
-                in_scope = True
-                if not cats:
-                    cats = [local_cat]
-
-            if in_scope and not cats:
-                 if local_cat != "General":
-                     cats = [local_cat]
-                 else:
-                     cats = [_default_category_from_anchors(q_strip)]
-
-            data["target_categories"] = cats if in_scope else []
-
-            # ensure keywords always exist
-            kws = data.get("keywords") or []
-            if not kws:
-                data["keywords"] = _extract_keywords_fallback(q_strip)
-
-            # fill optional fields expected by model (safe)
-            data.setdefault("course_title_candidate", None)
-            data.setdefault("english_search_term", None)
-            data.setdefault("goal_role", None)
-
-            out = RouterOutput(**data)
-
-            logger.info(
-                "Router: in_scope=%s intent=%s lang=%s cats=%s kws=%s",
-                out.in_scope, out.intent, out.user_language, out.target_categories, out.keywords
-            )
-            return out
-
-        except json.JSONDecodeError as e:
-            logger.error("Router JSON parse failed: %s | raw=%s", str(e), content[:300])
-
-            # deterministic fallback (no LLM)
-            cat = _default_category_from_anchors(q_strip)
             
-            # career cues fallback (Enriched with AI/DS terms)
-            ql = q_strip.lower()
-            career_cues = [
-                "المهارات المطلوبة","ايه المهارات","ازاي أبقى","ازاي ابقى","أول مهارة","اول مهارة",
-                "skills required","first skill","how to become","what should i learn",
-                "data scientist","machine learning","ai engineer","عالم بيانات","مهندس ذكاء"
-            ]
-            if any(cue in q_strip or cue in ql for cue in career_cues):
-                return RouterOutput(
-                    in_scope=True,
-                    intent="CAREER_GUIDANCE",
-                    target_categories=[cat],
-                    course_title_candidate=None,
-                    english_search_term=None,
-                    goal_role=None,
-                    keywords=_extract_keywords_fallback(q_strip),
-                    user_language=lang
-                )
-
-            # broad programming fallback
-            if any(x in ql for x in ["programming", "coding", "برمجة", "البرمجة"]):
-                return RouterOutput(
-                    in_scope=True,
-                    intent="CATEGORY_BROWSE",
-                    target_categories=["Programming"],
-                    course_title_candidate=None,
-                    english_search_term=None,
-                    goal_role=None,
-                    keywords=_extract_keywords_fallback(q_strip) or ["programming"],
-                    user_language=lang
-                )
-
-            # default in-scope skill search if anchors exist
-            if cat != "General":
-                return RouterOutput(
-                    in_scope=True,
-                    intent="SKILL_SEARCH",
-                    target_categories=[cat],
-                    course_title_candidate=None,
-                    english_search_term=None,
-                    goal_role=None,
-                    keywords=_extract_keywords_fallback(q_strip),
-                    user_language=lang
-                )
-
-            return RouterOutput(
-                in_scope=False,
-                intent="OUT_OF_SCOPE",
-                target_categories=[],
-                course_title_candidate=None,
-                english_search_term=None,
-                goal_role=None,
-                keywords=[],
-                user_language=lang
+            content = (response.choices[0].message.content or "").strip()
+            data = json.loads(content)
+            
+            # Map LLM intent string to Enum
+            raw_intent = data.get("intent", "").lower()
+            mapped_intent = "SEARCH" # Default
+            
+            if raw_intent == "career_guidance": mapped_intent = "CAREER_GUIDANCE"
+            elif raw_intent == "course_lookup": mapped_intent = "COURSE_DETAILS" # Or SKILL_SEARCH depending on specificity
+            elif raw_intent == "skill_lookup": mapped_intent = "SKILL_SEARCH"
+            elif raw_intent == "category_browse": mapped_intent = "CATEGORY_BROWSE"
+            elif raw_intent == "chit_chat": mapped_intent = "GREETING"
+            elif raw_intent == "admin": mapped_intent = "SUPPORT_POLICY"
+            
+            # Adjust mapping if user asks for generic course lookup -> SKILL_SEARCH
+            # The user spec differentiates course_lookup vs skill_lookup.
+            # We map consistent with app/models.py
+            
+            out = RouterOutput(
+                in_scope=data.get("in_scope", True),
+                intent=mapped_intent.upper() if mapped_intent.upper() in ["CAREER_GUIDANCE", "GREETING", "FOLLOW_UP", "AVAILABILITY_CHECK", "COURSE_DETAILS", "SKILL_SEARCH", "CATEGORY_BROWSE"] else "SKILL_SEARCH",
+                target_categories=data.get("target_categories", []),
+                user_language=data.get("language", lang),
+                user_goal=data.get("user_goal"),
+                target_role=data.get("target_role"),
+                keywords=data.get("keywords", []) or _extract_keywords_fallback(q_strip)
             )
-
+            
+            logger.info("Router: intent=%s role=%s goal=%s", out.intent, out.target_role, out.user_goal)
+            return out
+            
         except Exception as e:
-            last_error = e
-            logger.warning("Router attempt %d failed: %s", attempt + 1, str(e))
             if attempt < max_retries:
-                err = str(e).lower()
-                if "429" in err or "rate" in err:
-                    time.sleep(2 ** attempt)
-                    continue
-                if err.startswith("5") or "server" in err:
-                    time.sleep(1)
-                    continue
-            break
-
-    raise GroqUnavailableError(f"Router unavailable: {last_error}")
+                time.sleep(1)
+                continue
+            logger.error("Router failed: %s", e)
+            
+            # Fallback
+            return RouterOutput(
+                in_scope=True,
+                intent="SKILL_SEARCH",
+                user_language=lang,
+                keywords=_extract_keywords_fallback(q_strip)
+            )
+    
+    return RouterOutput(in_scope=True, intent="SKILL_SEARCH", user_language="en")

@@ -12,6 +12,7 @@ import re
 import uuid
 import pickle
 import logging
+import json
 from typing import List, Optional, Tuple, Dict, Any
 
 import numpy as np
@@ -145,6 +146,9 @@ async def retrieve_courses(
     if not items:
         items = await fallback_search(db, query, top_k=top_k + offset, filters=filters)
 
+    if items is None:
+        items = []
+        
     return items[offset: offset + top_k]
 
 
@@ -280,8 +284,130 @@ async def fallback_search(
             Course.description.ilike(f"%{v}%"),
             Course.skills.ilike(f"%{v}%"),
         ]
-
     stmt = base.where(or_(*ilikes)).limit(top_k)
     res = await db.execute(stmt)
     courses = res.scalars().all()
     return [CourseSchema.from_orm(c) for c in courses]
+
+# ============================================================
+# 4) RETRIEVAL CONTROLLER PROMPT (Layer 4)
+# ============================================================
+RETRIEVAL_CONTROLLER_PROMPT = """You are the Retrieval Controller.
+
+Input:
+- skills_or_areas with queries
+
+Task:
+- Create a retrieval plan to search the internal catalog across ALL categories.
+- For each skill/area, choose the best queries (max 2 queries per skill) to run first for high precision.
+- Provide fallback queries (up to 2) for recall if precision fails.
+- Provide thresholds:
+  - min_score_short_query = 70
+  - min_score_normal = 78
+
+Return JSON only:
+
+{
+  "search_scope": "ALL_CATEGORIES",
+  "plan": [
+    {
+      "canonical_en": "string",
+      "primary_queries": ["query1", "query2"],
+      "fallback_queries": ["query3", "query4"],
+      "min_score": 78,
+      "limit_per_query": 50
+    }
+  ],
+  "dedupe_by": "course_id"
+}
+"""
+
+from groq import Groq
+
+async def generate_search_plan(skills_data: Dict) -> Dict:
+    """Layer 4: Generate deterministic search plan."""
+    if not skills_data or "skills_or_areas" not in skills_data:
+        return {"plan": []}
+        
+    client = Groq(api_key=settings.groq_api_key)
+    
+    try:
+        completion = client.chat.completions.create(
+            model=settings.groq_model,
+            messages=[
+                {"role": "system", "content": RETRIEVAL_CONTROLLER_PROMPT},
+                {"role": "user", "content": json.dumps(skills_data, ensure_ascii=False)} 
+            ],
+            temperature=0.0,
+            response_format={"type": "json_object"},
+            timeout=settings.groq_timeout_seconds
+        )
+        return json.loads(completion.choices[0].message.content)
+    except Exception as e:
+        logger.error(f"[RetrievalController] Failed: {e}")
+        # Valid fallback: just search the skills directly
+        plan = []
+        for s in skills_data.get("skills_or_areas", []):
+            plan.append({
+                "canonical_en": s.get("canonical_en"),
+                "primary_queries": s.get("queries", [])[:4],
+                "fallback_queries": [],
+                "min_score": 70,
+                "limit_per_query": 10
+            })
+        return {"plan": plan, "dedupe_by": "course_id"}
+
+async def execute_and_group_search(
+    db: AsyncSession,
+    search_plan: Dict
+) -> Tuple[List[Dict], Dict[str, List[Dict]]]:
+    """
+    Layers 5 & 6: Execute search plan, dedupe, and group courses.
+    Returns (deduped_courses_dicts, skill_to_courses_map)
+    """
+    deduped_map = {} # course_id -> course_dict
+    skill_map = {}   # skill_en -> list of course_dicts
+    
+    plan_items = search_plan.get("plan", [])
+    
+    for item in plan_items:
+        skill_en = item.get("canonical_en")
+        queries = item.get("primary_queries", [])
+        limit = item.get("limit_per_query", 10)
+        
+        # Execute search for this skill
+        found_courses = []
+        for q in queries:
+            # We assume retrieve_courses handles semantic + keyword internally
+            # For strictness, higher precision logic should be here, but using existing retrieval for now.
+            courses = await retrieve_courses(db, q, top_k=limit)
+            found_courses.extend(courses)
+            
+        # Fallback if needed? (Skipped for speed unless empty)
+        if not found_courses and item.get("fallback_queries"):
+             for q in item.get("fallback_queries", []):
+                courses = await retrieve_courses(db, q, top_k=limit)
+                found_courses.extend(courses)
+
+        skill_map[skill_en] = []
+        
+        for c in found_courses:
+            cid = str(c.course_id)
+            c_dict = c.dict() if hasattr(c, "dict") else c.__dict__
+            
+            # Enrich with supported skills
+            if cid not in deduped_map:
+                c_dict["supported_skills"] = [skill_en]
+                deduped_map[cid] = c_dict
+            else:
+                if skill_en not in deduped_map[cid]["supported_skills"]:
+                    deduped_map[cid]["supported_skills"].append(skill_en)
+            
+            # Add to skill map (referencing the SAME dict object in deduped_map to keep synced)
+            skill_map[skill_en].append(deduped_map[cid])
+
+    # Convert values to list
+    all_courses = list(deduped_map.values())
+    
+    return all_courses, skill_map
+
