@@ -316,9 +316,12 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
                 analysis = analyze_career_request(message)
                 target_role = analysis.get("target_role", "Professional")
                 skill_areas = analysis.get("skill_areas", [])
+                correction_note = analysis.get("correction") # [NEW]
                 
-                # Store target role for Generator context
+                # Store target role & correction
                 session_memory["locked_role"] = target_role
+                if correction_note:
+                    session_memory["typo_correction"] = correction_note
                 
                 logger.info(f"Career Analysis: Role={target_role}, Areas={len(skill_areas)}")
                 
@@ -330,21 +333,20 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
                     found_for_area = []
                     
                     # Try to find courses for each keyword in the area
-                    # We accept more keywords to increase recall for the Area
                     for kw in keywords:
                         matches = find_skill_matches(kw)
                         if matches:
-                            # matches are sorted by score. Take top match for this keyword.
                             top_match = matches[0] 
                             course_ids = top_match["course_ids"][:3] 
                             
                             valid_uuids = []
-                            for tid in course_ids:
-                                try: valid_uuids.append(uuid.UUID(tid))
+                            for item in course_ids:
+                                # Data could be string ID or dict {"course_id": ...}
+                                tid = item.get("course_id") if isinstance(item, dict) else item
+                                try: valid_uuids.append(uuid.UUID(str(tid)))
                                 except: pass
                             
                             if valid_uuids:
-                                # Fetch actual course objects
                                 stmt = select(Course).where(Course.course_id.in_(valid_uuids))
                                 res = await db.execute(stmt)
                                 courses = res.scalars().all()
@@ -353,20 +355,26 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
                                     if not any(x.course_id == c.course_id for x in found_for_area):
                                         found_for_area.append(c) # Add unique courses to this AREA
                     
-                    # Add to Result Map (Area -> Courses)
-                    # We reuse skill_course_map, but keys are now Area Names
-                    skill_course_map[area_name] = [
-                        {"course_id": str(c.course_id), "title": c.title, "level": c.level, "instructor": c.instructor}
-                        for c in found_for_area[:5] # Limit 5 courses per Area to have variety
-                    ]
-                    
-                    # Add to Global Context
-                    for c in found_for_area:
-                        if not any(x.course_id == c.course_id for x in catalog_results):
-                            catalog_results.append(c)
-                            
-                    # Track order for display
-                    ordered_skills.append(area_name)
+                    # [STRICT GROUNDING RULE]
+                    # Only add this Area if we actually found courses for it.
+                    if found_for_area:
+                        skill_course_map[area_name] = [
+                            {"course_id": str(c.course_id), "title": c.title, "level": c.level, "instructor": c.instructor, "reason": c.description[:50]}
+                            for c in found_for_area[:3] # Limit 3 per Area
+                        ]
+                        
+                        # Add to Global Context
+                        for c in found_for_area:
+                            if not any(x.course_id == c.course_id for x in catalog_results):
+                                catalog_results.append(c)
+                                
+                        # Track order for display
+                        ordered_skills.append(area_name)
+                    else:
+                        logger.info(f"Dropping area '{area_name}' due to no course matches.")
+
+                if not catalog_results:
+                     logger.info("No courses found via Career Analysis Loop.")
 
                 if not catalog_results:
                      logger.info("No courses found via Career Analysis Loop.")

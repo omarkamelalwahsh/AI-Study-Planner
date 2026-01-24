@@ -89,11 +89,13 @@ Analyze the user's career guidance request.
 Input: "{user_input}"
 
 Goal:
-1. Identify the **Target Role** (e.g., "Sales Manager", "Data Scientist").
-2. Identify 4-6 **Broad Skill Areas** required for this role (NOT specific tools, but high-level areas like "Leadership", "Strategic Planning", "Data Analysis").
+1. Detect and correct any typos in the role (e.g., "god leader" -> "good leader").
+2. Identify the **Target Role** (Corrected).
+3. Identify 4-6 **Broad Skill Areas** required for this role (high-level areas like "Leadership", "Strategic Planning").
 
 Output JSON:
 {
+  "correction": "String showing assumption if typo found (e.g. 'I assume you meant...') or null",
   "target_role": "string",
   "skill_areas": [
     {
@@ -110,7 +112,7 @@ Rules:
 
 def analyze_career_request(user_input: str) -> dict:
     """
-    Analyzes career request to get Role + Broad Areas.
+    Analyzes career request to get Role + Broad Areas + Typo Correction.
     """
     if not user_input or len(user_input.strip()) < 2:
         return {"target_role": "Professional", "skill_areas": []}
