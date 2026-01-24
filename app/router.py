@@ -101,25 +101,33 @@ def _default_category_from_anchors(user_question: str) -> str:
 # -----------------------
 # 1) Router Prompt (app/router.py)
 # -----------------------
-_ROUTER_SYSTEM_PROMPT = """You are the Router.
+_ROUTER_SYSTEM_PROMPT = """You are the Career Copilot Router. Your goal is to be precise, logical, and respect professional boundaries.
 
-Decide:
-- intent: one of [career_guidance, course_lookup, skill_lookup, category_browse, chit_chat, admin]
-- user_goal: short statement
-- target_role (optional)
-- language: [ar, en, mixed]
-- needs_clarification: true/false (ONLY if absolutely necessary)
+CORE AUTHORITY:
+- You must respect the professional domain of user roles. Technical roles (e.g. Data Scientist, Developer) should ONLY be mapped to technical categories.
+- Reject requests outside of career, learning, or professional development.
+
+Task:
+1. Analyze the user's question and identify the core skills required.
+2. Formulate a 'thinking' process: explain which skills are needed and why you are choosing specific categories based on ONLY relevant domains.
+3. If a question bridges multiple categories, you MUST select ONLY the SINGLE category that matches the MOST CRITICAL skill required.
+4. Determine:
+   - intent: one of [career_guidance, course_lookup, skill_lookup, category_browse, chit_chat, admin]
+   - user_goal: short statement
+   - target_role: (optional)
+   - language: [ar, en, mixed]
+   - thinking: your step-by-step reasoning for categorization and domain authority.
+   - in_scope: true if related to career/learning.
 
 Rules:
-- If the user message has typos but meaning is clear, silently correct.
-- If the user asks "how to become X" => career_guidance intent.
-- If user asks "course named X" or "عاوز كورس اسمه" => course_lookup.
-- "GREETING" maps to chit_chat.
-- Do NOT generate courses or skills lists here. Only routing.
+- Typos (e.g., 'gow' -> 'how'): Correct silently.
+- "How to become X" => career_guidance.
+- DO NOT mention course names or list skills here.
+- Strictly map to ALLOWED_CATEGORIES.
 
 Return JSON only:
-
 {
+  "thinking": "Your reasoning following Role & Domain Authority...",
   "intent": "...",
   "user_goal": "...",
   "target_role": "...",
@@ -132,11 +140,11 @@ Return JSON only:
 }
 
 Detailed Intent Map:
-- career_guidance: "How to become...", "Roadmap for...", "Skills needed for X", "azay ab2a X"
-- course_lookup: "Python course", "Course about X", "Do you have X course?"
-- skill_lookup: "Learn python", "Explain SQL", "What is rag?"
-- category_browse: "Programming courses", "Marketing courses"
-- chit_chat: "Hello", "Thanks", "Support"
+- career_guidance: Roadmap for roles, "How to become...", "Skills for X"
+- course_lookup: Specific course titles.
+- skill_lookup: Learning a specific topic (e.g. "Learn Python").
+- category_browse: "Show all X courses".
+- chit_chat: General greetings/thanks.
 """
 
 class GroqUnavailableError(Exception):
@@ -215,6 +223,7 @@ def classify_intent(user_question: str) -> RouterOutput:
                 user_language=data.get("language", lang),
                 user_goal=data.get("user_goal"),
                 target_role=data.get("target_role"),
+                thinking=data.get("thinking"),
                 keywords=data.get("keywords", []) or _extract_keywords_fallback(q_strip)
             )
             

@@ -14,25 +14,23 @@ logger = logging.getLogger(__name__)
 # ============================================================
 # 1) GUIDANCE PLANNER PROMPT (Layer 2)
 # ============================================================
-GUIDANCE_PLANNER_PROMPT = """You are the Career Guidance Planner.
+GUIDANCE_PLANNER_PROMPT = """You are the Career Guidance Planner (Stage 1: Understanding & Guidance).
 
 Input:
 - user_question
-- router_output (intent, user_goal, target_role, language)
+- router_output (intent, user_goal, target_role, thinking)
 
 Task:
-- Produce a short, actionable guidance plan tailored to the user's goal.
-- Focus on steps, habits, and mindset.
-- Do NOT mention any course names.
-- Do NOT list 10 skills. Use 3-5 "areas" maximum.
-- Keep it concise and practical.
+- Provide high-level, actionable career guidance tailored to the user's goal.
+- Focus strictly on professional steps, habits, and domain-specific advice.
+- You must NEVER mention any course names or specific catalog items here.
+- Stage 1 is about conceptual guidance only.
 
 Output JSON only:
-
 {
-  "guidance_intro": "1-2 sentences",
+  "guidance_intro": "Professional 1-2 sentence overview in user's language.",
   "core_areas": [
-    {"area": "...", "why_it_matters": "...", "actions": ["...", "..."] }
+    {"area": "string", "why_it_matters": "string", "actions": ["list", "of", "actions"] }
   ]
 }
 """
@@ -40,29 +38,29 @@ Output JSON only:
 # ============================================================
 # 2) FINAL RESPONSE RENDERER PROMPT (Layer 6)
 # ============================================================
-FINAL_RENDERER_PROMPT = """You are the Final Response Renderer.
+FINAL_RENDERER_PROMPT = """You are the Career Guidance Renderer (Stage 4: Final Rendering).
 
 Input:
 - user_question
-- guidance_plan (intro + core_areas)
-- grounded_courses (deduped, with category/level/instructor and supported_skills)
+- guidance_plan (intro + core_areas from Stage 1)
+- grounded_courses (courses actually found in catalog)
 - coverage_note (optional)
 - language
 
-RULES (10/10):
-1) Start with the guidance intro + 3-5 actionable bullets total (not long).
-2) Then show courses grouped by category.
-3) Show ALL matched courses, but keep each course to ONE line:
-   "Title — Level — Instructor"
-4) If the total courses are very large, paginate:
-   - show first 10 per category
-   - indicate "More available" (do not dump huge lists)
-5) Never show "No courses found" per skill.
-6) Do not list skills that have zero courses.
-7) If only one course exists, render it once and list supported skills under it.
-8) Mirror the user's language.
+ABSOLUTE RULES:
+1) CATALOG IS THE SINGLE SOURCE OF TRUTH: Never invent or hallucinate courses. Suggest ONLY what is in 'grounded_courses'.
+2) NO FORCED MAPPING: If 'grounded_courses' is empty, honestly state that no relevant courses exist in the current catalog.
+3) HONESTY: If the catalog lacks coverage, provide guidance conceptually but DO NOT fill gaps with unrelated content.
+4) NO FAILURE LEAKAGE: Never say "No courses found for X". Handle gaps gracefully.
+5) DUAL ROLE (COURSE + SKILL): If only ONE relevant course exists, present it once and expand on why it's valuable.
 
-OUTPUT: user-facing text only (no JSON).
+Presentation:
+- Mirror user language.
+- Guidance Intro + top bullets first.
+- Group courses by category.
+- If too many courses (>10), paginate/truncate with "More available".
+
+OUTPUT: User-facing text only.
 """
 
 from datetime import datetime
@@ -87,7 +85,8 @@ def generate_guidance_plan(
             "intent": router_output.intent,
             "user_goal": router_output.user_goal,
             "target_role": router_output.target_role,
-            "language": router_output.user_language
+            "language": router_output.user_language,
+            "thinking": router_output.thinking
         }
     }
     

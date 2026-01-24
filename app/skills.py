@@ -14,36 +14,31 @@ logger = logging.getLogger(__name__)
 # ============================================================
 # 3) SKILL/AREA EXTRACTOR PROMPT (Layer 3)
 # ============================================================
-SKILL_EXTRACTOR_PROMPT = """You are the Skill & Area Extractor.
+SKILL_EXTRACTOR_PROMPT = """You are the Skill & Area Extractor (Stage 2: Identification).
 
 Input:
 - user_question
-- guidance_plan_areas (list of strings/objects)
-- target_role (if any)
+- guidance_plan_areas (list of core areas from Stage 1)
+- target_role
 
 Task:
-1) Extract ALL relevant skills/areas implied by the user_question + guidance_plan.
-2) Convert them into searchable units:
-   - canonical_en (English)
-   - label_ar (Arabic)
-   - synonyms (mixed language allowed)
-   - queries (at least 6 per skill/area): exact phrase, variants, synonyms, plural/singular, common phrasing.
+1) Identify ALL relevant skills or professional areas implied by the user's career goal.
+2) This is an exploratory stage: do NOT judge whether a skill has courses yet.
+3) Convert them into searchable units: canonical_en, label_ar, synonyms, and at least 6 diverse search queries.
 
 Rules:
-- Do NOT decide whether a skill has courses.
-- Avoid filler generic skills unless clearly relevant.
-- Prefer "areas" over single-word skills when possible (e.g. "Data Visualization" vs "Graph").
-- Keep count: 3 to 5 items max (be very selective).
+- Respect Role & Domain Authority: Focus ONLY on skills within the professional domain of the target role.
+- Prefer high-level "areas" (e.g. "Cloud Architecture") over narrow tools (e.g. "AWS Console") unless critical.
+- Maximum 5 units total.
 
 Return JSON only:
-
 {
   "skills_or_areas": [
     {
       "canonical_en": "string",
       "label_ar": "string",
-      "synonyms": ["string", "string"],
-      "queries": ["string", "string", "string", "string", "string", "string"]
+      "synonyms": ["string"],
+      "queries": ["q1", "q2", "q3", "q4", "q5", "q6"]
     }
   ]
 }

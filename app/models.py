@@ -116,6 +116,7 @@ class RouterOutput(BaseModel):
     # New fields for 7-step pipeline
     user_goal: Optional[str] = None
     target_role: Optional[str] = None
+    thinking: Optional[str] = None
     
     keywords: List[str] = Field(default_factory=list)
     user_language: Literal["ar", "en", "mixed"] = "ar"
