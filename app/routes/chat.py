@@ -21,17 +21,21 @@ from app.router import GroqUnavailableError
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-SKILL_TRANSLATOR_SYSTEM = """You are a translation and normalization service.
-Return JSON only. No extra text.
+SKILL_TRANSLATOR_SYSTEM = """You are a translation and normalization service for a Course Search Engine.
+Return JSON only.
 
 Rules:
-- Input is a list of skills (Arabic/English/mixed).
-- Output must be English short skill keywords suitable for course search.
-- Keep it 2-5 words per skill max.
-- Remove filler words and make it searchable.
-- Do NOT invent new skills; translate/normalize only.
+1. Input: List of mixed Arabic/English skills.
+2. Output: "skills_en": List of specific, searchable English technical keywords.
+3. OPTIMIZATION FOR SEARCH:
+   - "البيانات" -> "Data Analysis" (not "Data")
+   - "الذكاء الاصطناعي" -> "Artificial Intelligence"
+   - "إدارة" -> "Project Management" or "Business Management" (not "Management")
+   - Avoid stopwords.
+   - Use canonical industry terms.
+
 Return:
-{"skills_en":[...]}"""
+{"skills_en":["Skill1", "Skill2"]}"""
 
 
 def wants_courses_for_listed_skills(msg: str) -> bool:
@@ -42,6 +46,15 @@ def wants_courses_for_listed_skills(msg: str) -> bool:
          "كورسات للمهارات", "courses for these skills"
     ]
     return any(c in m for c in cues)
+
+
+async def retrieve_for_each_skill(db, skills_en: list[str], top_k_per_skill: int = 2):
+    results = []
+    for sk in skills_en:
+        hits = await retrieve_courses(db, sk, top_k=top_k_per_skill, offset=0, filters={})
+        results.append((sk, hits))
+    return results
+
 
 async def translate_skills_to_english(skills: list[str]) -> list[str]:
     client = Groq(api_key=settings.groq_api_key)
@@ -68,17 +81,15 @@ async def translate_skills_to_english(skills: list[str]) -> list[str]:
             s2 = (s or "").strip()
             if s2 and s2 not in out:
                 out.append(s2)
-        return out[:20]
+        # Ensure parity with input list length for mapping
+        # If lengths differ, we might lose alignment, so we try to keep them aligned or truncate
+        return out
     except Exception as e:
         logger.error(f"Translation failed: {e}")
-        return skills # Fallback to original
+        return skills # Fallback
 
-async def retrieve_for_each_skill(db, skills_en: list[str], top_k_per_skill: int = 2):
-    results = []
-    for sk in skills_en:
-        hits = await retrieve_courses(db, sk, top_k=top_k_per_skill, offset=0, filters={})
-        results.append((sk, hits))
-    return results
+
+
 
 @router.post("/chat", response_model=ChatResponse, responses={503: {"model": ErrorResponse}})
 
@@ -128,14 +139,23 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
             target_categories = router_output.target_categories
             user_language = router_output.user_language or detect_language(message)
             
+            # [NEW] Force CAREER_GUIDANCE for "Learn/Become" queries to ensure DEFINITION + PATH
+            # patterns: "learn", "start", "become", "road map", "guide", "teaching", "teach", "تعلم", "ابدأ", "خارطة", "مسار", "كيف", "عاوز ابقي", "عايز ابقي", "عايز اتعلم", "عاوز اتعلم"
+            edu_triggers = ["learn", "start", "become", "roadmap", "guide", "teaching", "teach", "تعلم", "ابدأ", "خارطة", "مسار", "كيف", "عاوز ابقي", "عايز ابقي", "عايز اتعلم", "عاوز اتعلم"]
+            if any(t in message.lower() for t in edu_triggers):
+                intent = "CAREER_GUIDANCE"
+
             # If user explicitly wants courses, override intent to SEARCH/BROWSE if it was GUIDANCE
-            if user_wants_courses and intent in ["CAREER_GUIDANCE", "PLAN_REQUEST", "GREETING"]:
+            # [MODIFIED] We allow CAREER_GUIDANCE to proceed even if user wants courses, because Pattern 2 handles courses gracefully.
+            if user_wants_courses and intent in ["PLAN_REQUEST", "GREETING"] and intent != "CAREER_GUIDANCE":
+                 # Only demographics/greeting go to pure search. Educational stays Guidance.
                 intent = "COURSE_SEARCH"
                 
         except GroqUnavailableError:
-            # Fallback if router fails: Assume basic search
+            # Fallback if router fails
             from app.models import RouterOutput
-            intent = "COURSE_SEARCH" if user_wants_courses else "CAREER_GUIDANCE"
+            # Default to Guidance for robustness
+            intent = "CAREER_GUIDANCE"
             target_categories = []
             user_language = detect_language(message)
             router_output = RouterOutput(
@@ -239,6 +259,8 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
         # Determine query for retrieval
         search_query = message
         extracted_skills = None # [NEW] Scope initialization
+        skill_course_map = {}
+        ordered_skills = []
         
         if intent == "FOLLOW_UP":
             # Restore context
@@ -251,6 +273,27 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
             # Next page
             last_offset = session_memory.get("offset", 0)
             current_offset = last_offset + PAGE_SIZE
+        
+        elif intent == "AVAILABILITY_CHECK":
+            # Check if user provided new keywords or if we should use context
+            # If keywords are just "courses" or empty, use history
+            is_generic_check = not router_output.keywords or all(k in ["courses", "corse", "cours", "كورس", "كورسات"] for k in router_output.keywords)
+            
+            if is_generic_check and session_memory.get("last_skill_query"):
+                logger.info("Generic availability check detected, using context.")
+                search_query = session_memory.get("last_skill_query")
+                # Do NOT advance offset (start from 0 to show top results)
+                current_offset = 0
+                
+                last_cat = session_memory.get("last_categories", [])
+                if last_cat:
+                    filters["categories"] = last_cat
+                    target_categories = last_cat
+            else:
+                 # Specific check (e.g. "Do you have python courses?")
+                 current_offset = 0
+                 if router_output.keywords:
+                     search_query = " ".join(router_output.keywords)
         else:
             # New query
             current_offset = 0
@@ -259,24 +302,81 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
             if router_output.keywords:
                 search_query = " ".join(router_output.keywords)
                 
-            # [NEW] Layer 1.5: Skill Extraction for Career Guidance
-            # If the user wants to be X, we translate X to English skills for better retrieval.
+            # [NEW] Layer 1.5: Skill Extraction for Career Guidance (Structured)
+            skill_course_map = {}
+            ordered_skills = []
+            catalog_results = [] # Initialize here to allow appending found courses
+            
             if intent == "CAREER_GUIDANCE":
-                from app.skills import extract_skills_for_role
-                # We use the raw message or a slightly cleaned version to get the full role context
-                # Assign to local var
-                extracted_skills = extract_skills_for_role(message)
-                if extracted_skills and extracted_skills != message:
-                    logger.info(f"Enriching query: '{message}' -> '{extracted_skills}'")
-                    search_query = extracted_skills
-                    # Optionally append to keywords so the system knows them
-                    router_output.keywords = extracted_skills.split()
+                from app.skills import analyze_career_request
+                from app.utils.skill_index import find_skill_matches
+                from app.models import Course
+                
+                # 1. Analyze Request (Role & Areas)
+                analysis = analyze_career_request(message)
+                target_role = analysis.get("target_role", "Professional")
+                skill_areas = analysis.get("skill_areas", [])
+                
+                # Store target role for Generator context
+                session_memory["locked_role"] = target_role
+                
+                logger.info(f"Career Analysis: Role={target_role}, Areas={len(skill_areas)}")
+                
+                # 2. Retrieval per Area
+                for area in skill_areas:
+                    area_name = area.get("area_name", "General")
+                    keywords = area.get("search_keywords", [])
+                    
+                    found_for_area = []
+                    
+                    # Try to find courses for each keyword in the area
+                    # We accept more keywords to increase recall for the Area
+                    for kw in keywords:
+                        matches = find_skill_matches(kw)
+                        if matches:
+                            # matches are sorted by score. Take top match for this keyword.
+                            top_match = matches[0] 
+                            course_ids = top_match["course_ids"][:3] 
+                            
+                            valid_uuids = []
+                            for tid in course_ids:
+                                try: valid_uuids.append(uuid.UUID(tid))
+                                except: pass
+                            
+                            if valid_uuids:
+                                # Fetch actual course objects
+                                stmt = select(Course).where(Course.course_id.in_(valid_uuids))
+                                res = await db.execute(stmt)
+                                courses = res.scalars().all()
+                                
+                                for c in courses:
+                                    if not any(x.course_id == c.course_id for x in found_for_area):
+                                        found_for_area.append(c) # Add unique courses to this AREA
+                    
+                    # Add to Result Map (Area -> Courses)
+                    # We reuse skill_course_map, but keys are now Area Names
+                    skill_course_map[area_name] = [
+                        {"course_id": str(c.course_id), "title": c.title, "level": c.level, "instructor": c.instructor}
+                        for c in found_for_area[:5] # Limit 5 courses per Area to have variety
+                    ]
+                    
+                    # Add to Global Context
+                    for c in found_for_area:
+                        if not any(x.course_id == c.course_id for x in catalog_results):
+                            catalog_results.append(c)
+                            
+                    # Track order for display
+                    ordered_skills.append(area_name)
+
+                if not catalog_results:
+                     logger.info("No courses found via Career Analysis Loop.")
+
         
         # Step 4: Retrieval (Layer 2) - UNIFIED GROUNDING
         # We always attempt to retrieve relevant courses to ground the LLM, 
         # unless it's a Greeting or clearly out of scope (but we let LLM decide scope usually).
         
-        catalog_results = []
+        # catalog_results initialized above
         suggested_titles = []
         
         # Filter logic
@@ -341,7 +441,9 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
                 chat_history=chat_history_dicts, # [MODIFIED] Pass actual history
                 session_memory=next_memory,
                 user_wants_courses=user_wants_courses, # New Param
-                extracted_skills=extracted_skills # [NEW] Pass mapped skills
+                extracted_skills=extracted_skills, # Legacy param, keep for now or pass list
+                skill_course_map=skill_course_map, # [NEW] Structured map
+                ordered_skills=ordered_skills # [NEW] Original skills order
             )
             
             response_text = generator_output.get("answer_md", "")
@@ -424,4 +526,6 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
         raise he
     except Exception as e:
         logger.exception(f"Unexpected error: {e}")
-        raise HTTPException(status_code=500, detail="Internal Server Error")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")

@@ -87,10 +87,12 @@ def _default_category_from_anchors(user_question: str) -> str:
         return "Career Development"
     if any(x in ql for x in ["excel", "powerpoint", "word", "ويندوز", "أوفيس"]):
         return "Technology Applications"
-    if any(x in ql for x in ["sales", "مبيعات", "تسويق"]):
+    if any(x in ql for x in ["sales", "مبيعات", "تسويق", "marketing"]):
         return "Sales"
-    if any(x in ql for x in ["communication", "تواصل", "soft skills", "مهارات شخصية"]):
+    if any(x in ql for x in ["communication", "تواصل", "soft skills", "مهارات شخصية", "negotiation"]):
         return "Soft Skills"
+    if any(x in ql for x in ["business", "entrepreneur", "startup", "management", "bussines", "businessman", "ريداة أعمال", "بيزنس", "إدارة"]):
+        return "Entrepreneurship"
     return "General"
 
 # -----------------------
@@ -130,6 +132,7 @@ STRONG ANCHORS:
 - Project Management: scrum, agile, pmp, إدارة مشاريع
 - Career Development: resume, cv, interview, portfolio, سيرة ذاتية
 - Technology Applications: excel, powerpoint, word, ويندوز, أوفيس
+- Business / Entrepreneurship: business, entrepreneur, startup, management, businessman, بيزنس, ريادة أعمال, إدارة
 
 If ANY anchor appears => in_scope=true.
 
@@ -231,8 +234,19 @@ def classify_intent(user_question: str) -> RouterOutput:
             cats = data.get("target_categories") or []
             cats = [c for c in cats if c in ALLOWED_CATEGORIES]
 
+            # [FIX] Force in_scope if strong local anchor exists
+            # This protects against LLM being too strict or hallucinating scope
+            local_cat = _default_category_from_anchors(q_strip)
+            if local_cat != "General":
+                in_scope = True
+                if not cats:
+                    cats = [local_cat]
+
             if in_scope and not cats:
-                cats = [_default_category_from_anchors(q_strip)]
+                 if local_cat != "General":
+                     cats = [local_cat]
+                 else:
+                     cats = [_default_category_from_anchors(q_strip)]
 
             data["target_categories"] = cats if in_scope else []
 
