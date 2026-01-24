@@ -91,7 +91,8 @@ Input: "{user_input}"
 Goal:
 1. Detect and correct any typos in the role (e.g., "god leader" -> "good leader").
 2. Identify the **Target Role** (Corrected).
-3. Identify 4-6 **Broad Skill Areas** required for this role (high-level areas like "Leadership", "Strategic Planning").
+3. Identify 4-6 **Broad Skill Areas** required for this role.
+4. For each area, generate **at least 4 search queries** (English/Arabic synonyms, specific terms, variants).
 
 Output JSON:
 {
@@ -100,14 +101,14 @@ Output JSON:
   "skill_areas": [
     {
       "area_name": "string (Title Case)",
-      "search_keywords": ["keyword1", "keyword2"]
+      "search_keywords": ["query1", "query2", "query3", "query4..."]
     }
   ]
 }
 
 Rules:
 - Areas must be broad enough to map to multiple courses.
-- Search keywords should include specific terms relevant to that area to help retrieval.
+- Search keywords must include: exact phrase, common variant, synonym, and a broader phrase.
 """
 
 def analyze_career_request(user_input: str) -> dict:

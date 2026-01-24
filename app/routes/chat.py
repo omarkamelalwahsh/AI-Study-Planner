@@ -325,45 +325,87 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
                 
                 logger.info(f"Career Analysis: Role={target_role}, Areas={len(skill_areas)}")
                 
-                # 2. Retrieval per Area
+                # 2. Retrieval per Area (DEEP SEARCH Strategy)
                 for area in skill_areas:
                     area_name = area.get("area_name", "General")
                     keywords = area.get("search_keywords", [])
                     
-                    found_for_area = []
+                    found_for_area = [] # List of course objects
                     
-                    # Try to find courses for each keyword in the area
+                    # Track evidence: how did we find this course?
+                    # course_id -> {"queries": [], "score": 0}
+                    area_evidence = {} 
+
+                    # Execute ALL queries for the area (Deep Search)
                     for kw in keywords:
                         matches = find_skill_matches(kw)
                         if matches:
-                            top_match = matches[0] 
-                            course_ids = top_match["course_ids"][:3] 
+                            # Consider top 2 matches for EACH query to maximize recall
+                            top_matches = matches[:2]
                             
-                            valid_uuids = []
-                            for item in course_ids:
-                                # Data could be string ID or dict {"course_id": ...}
-                                tid = item.get("course_id") if isinstance(item, dict) else item
-                                try: valid_uuids.append(uuid.UUID(str(tid)))
-                                except: pass
-                            
-                            if valid_uuids:
-                                stmt = select(Course).where(Course.course_id.in_(valid_uuids))
-                                res = await db.execute(stmt)
-                                courses = res.scalars().all()
+                            for m in top_matches:
+                                # Extract ID
+                                course_ids = m.get("course_ids", [])[:15] # [EXPANDED] Up to 15 courses per match to maximize recall
+                                score = m.get("score", 0)
+                                match_key = m.get("key", "")
                                 
-                                for c in courses:
-                                    if not any(x.course_id == c.course_id for x in found_for_area):
-                                        found_for_area.append(c) # Add unique courses to this AREA
+                                for item in course_ids:
+                                    tid = item.get("course_id") if isinstance(item, dict) else item
+                                    tid_str = str(tid)
+                                    
+                                    # Record evidence
+                                    if tid_str not in area_evidence:
+                                        area_evidence[tid_str] = {"queries": set(), "score": score}
+                                    
+                                    area_evidence[tid_str]["queries"].add(f"{kw} (matched '{match_key}')")
+                                    # specific logic: keep max score
+                                    if score > area_evidence[tid_str]["score"]:
+                                        area_evidence[tid_str]["score"] = score
+                    
+                    # Fetch Courses if we have candidates
+                    candidate_ids = list(area_evidence.keys())
+                    if candidate_ids:
+                         valid_uuids = []
+                         # [EXPANDED] Fetch more candidates since we want to show multiple
+                         for cid in candidate_ids[:40]: 
+                             try: valid_uuids.append(uuid.UUID(cid))
+                             except: pass
+                         
+                         if valid_uuids:
+                             stmt = select(Course).where(Course.course_id.in_(valid_uuids))
+                             res = await db.execute(stmt)
+                             courses = res.scalars().all()
+                             
+                             # Sort by Evidence Score desc
+                             courses_sorted = sorted(
+                                 courses, 
+                                 key=lambda c: area_evidence.get(str(c.course_id), {}).get("score", 0), 
+                                 reverse=True
+                             )
+                             
+                             found_for_area = courses_sorted
                     
                     # [STRICT GROUNDING RULE]
                     # Only add this Area if we actually found courses for it.
                     if found_for_area:
-                        skill_course_map[area_name] = [
-                            {"course_id": str(c.course_id), "title": c.title, "level": c.level, "instructor": c.instructor, "reason": c.description[:50]}
-                            for c in found_for_area[:3] # Limit 3 per Area
-                        ]
+                        skill_course_map[area_name] = []
+                        # [EXPANDED] Add top 10 courses per Area (was 3)
+                        # The Generator LLM will control pagination/formatting if 10 is too many,
+                        # but we must provide them to context.
+                        for c in found_for_area[:10]:
+                            cid_str = str(c.course_id)
+                            evidence = area_evidence.get(cid_str, {})
+                            queries_str = ", ".join(list(evidence.get("queries", []))[:2])
+                            
+                            skill_course_map[area_name].append({
+                                "course_id": cid_str, 
+                                "title": c.title, 
+                                "level": c.level, 
+                                "instructor": c.instructor, 
+                                "reason": f"Matched via: {queries_str}" 
+                            })
                         
-                        # Add to Global Context
+                        # Add to Global Context (Deduplicated)
                         for c in found_for_area:
                             if not any(x.course_id == c.course_id for x in catalog_results):
                                 catalog_results.append(c)
@@ -372,6 +414,13 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
                         ordered_skills.append(area_name)
                     else:
                         logger.info(f"Dropping area '{area_name}' due to no course matches.")
+
+                # [GLOBAL SEARCH RULE]
+                # If we did Career Guidance search, we ignore category filters for the Retrieval Layer
+                # effectively bypassing the "General" filter if it was set.
+                if catalog_results:
+                     target_categories = [] # Clear filters so Layer 2 doesn't wipe our results
+                     filters = {} 
 
                 if not catalog_results:
                      logger.info("No courses found via Career Analysis Loop.")
