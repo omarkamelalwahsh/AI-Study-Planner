@@ -234,7 +234,7 @@ export default function ChatInterface() {
                         {msg.courses && msg.courses.length > 0 && (
                             <div className="courses-grid">
                                 {msg.courses.map((course) => (
-                                    <CourseCard key={course.id} course={course} />
+                                    <CourseCard key={course.course_id} course={course} />
                                 ))}
                             </div>
                         )}

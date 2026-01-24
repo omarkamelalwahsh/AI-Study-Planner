@@ -1,11 +1,13 @@
 interface Course {
-    id: string;
+    course_id: string;
+    id?: string;
     title: string;
     level?: string;
     category?: string;
     instructor?: string;
     duration_hours?: number;
     description?: string;
+    reason?: string;
 }
 
 interface CourseCardProps {
@@ -46,6 +48,12 @@ export default function CourseCard({ course }: CourseCardProps) {
                     </div>
                 )}
             </div>
+
+            {course.reason && (
+                <div className="course-reason">
+                    <strong>💡 لماذا أرشح لك هذا الكورس:</strong> {course.reason}
+                </div>
+            )}
 
             {course.description && (
                 <p className="course-description">{course.description}</p>

@@ -50,7 +50,7 @@ class ChatSession(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     created_at = Column(TIMESTAMP, default=datetime.utcnow)
     updated_at = Column(TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
-    session_memory = Column(JSONB, default={})
+    session_memory = Column(JSONB, default=dict)
 
 
 class ChatMessage(Base):
