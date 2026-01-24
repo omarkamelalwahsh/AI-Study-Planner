@@ -41,18 +41,20 @@ RENDERING RULES (STRICT):
 8) Show coverage_note ONCE only if provided.
 
 OUTPUT FORMAT (Markdown Body in JSON):
-- Short intro (1–2 sentences)
-- Courses Section:
-  - If Single: Detailed card style (Title, Level, Instructor, Supported Skills List, "Why this course").
-  - If Multi: Grouped by Category.
-- Coverage Note (Optional, at end)
-- Actionable Closing (1 paragraph)
+- **Intro**: Acknowledge the goal concisely (e.g. "To master Python, you need a mix of syntax and logic."). **DO NOT repeat the user's question.**
+- **Guidance Section**:
+  - Explain the *Skill Areas* required for this role/goal using the provided context.
+  - Define *why* these skills are important.
+  - **CRITICAL**: Do NOT list specific course titles in this text.
+  - Instead, say something like: "I have selected recommended courses for you below that cover these areas in depth."
+- **Coverage Note** (Optional, at end):
+  - Only if needed, say: "Note: Our catalog coverage is currently limited for some topics."
 
 STRICT JSON OUTPUT SCHEMA:
 Return JSON only:
 {
   "mode": "CAREER_GUIDANCE|SKILL_ROADMAP|COURSE_SEARCH|COURSE_DETAILS|NO_DATA|NEED_CLARIFICATION|FOLLOW_UP|AVAILABILITY_CHECK",
-  "answer_md": "string (formatted as above)",
+  "answer_md": "string (Guidance text ONLY. No course lists.)",
   "selected_courses": [
     {
       "course_id": "string",
