@@ -34,12 +34,8 @@ DOMAIN_BLACKLIST = {
 }
 
 def is_blacklisted(role_type: str, category: str) -> bool:
-    if not role_type or not category:
-        return False
-    # Map role_type to blacklist key
-    key = role_type.lower()
-    if key in DOMAIN_BLACKLIST:
-        return category in DOMAIN_BLACKLIST[key]
+    # Soft Relevance Rule: We do NOT hard-block courses by category anymore.
+    # The 'hard_skill_gate' below will handle relevance verification.
     return False
 
 def hard_skill_gate(course: Dict, skills: List[str]) -> bool:
