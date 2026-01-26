@@ -12,7 +12,12 @@ import uuid
 import logging
 from app.router import classify_intent, GroqUnavailableError
 from app.retrieval import retrieve_courses, generate_search_plan, execute_and_group_search
-from app.generator import generate_guidance_plan, generate_final_response, generate_project_ideas
+from app.generator import (
+    generate_guidance_plan, 
+    generate_final_response, 
+    generate_project_ideas,
+    _relevance_gate
+)
 from app.skills import extract_skills_and_areas
 from app.utils.normalization import normalize_text, wants_courses, detect_language
 
@@ -97,17 +102,22 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
             if router_out.target_categories:
                 filters["category"] = router_out.target_categories[0] # Simplification
                 
-            raw_courses = await retrieve_courses(db, q, top_k=10, offset=offset, filters=filters)
-            
-            # Convert to dictionary format expected by formatted renderer
+            # Execute standard retrieval
+            # IMPROVEMENT: Use keywords and message context for better recall
+            search_queries = [message]
+            if router_out.keywords:
+                search_queries = router_out.keywords + search_queries
+                
             dedup_map = {}
-            for c in raw_courses:
-                cid = str(c.course_id)
-                if cid not in dedup_map:
-                    cd = c.dict()
-                    cd["supported_skills"] = ["Matched Query"] # Generic support
-                    dedup_map[cid] = cd
-                    
+            for q in search_queries[:4]: # Limit queries
+                raw_courses = await retrieve_courses(db, q, top_k=10, filters=None)
+                for c in raw_courses:
+                    cid = str(c.course_id)
+                    if cid not in dedup_map:
+                        cd = c.dict()
+                        cd["supported_skills"] = ["Search Match"]
+                        dedup_map[cid] = cd
+                        
             grounded_courses = list(dedup_map.values())
             
             # Create a dummy guidance plan for the Renderer
@@ -132,15 +142,71 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
              project_data = generate_project_ideas(message, router_out.user_language)
 
         response_text = guidance_data.get("text", "")
-        # You might want to append skills to the text if the UI doesn't display them separately
-        # But per user request "UI will display Cards", so we assume UI handles structured data or we just send text.
-        # User said: "Output: Definition, Skills, Course Cards".
-        # If UI expects markdown skills in 'answer', we might need to append them.
-        # "UI displays: Definition, Skills..."
-        # Let's append skills to text to be safe for a generic markdown UI
         extracted_skills = guidance_data.get("skills", [])
+        
+        # 1) LLM-based Tiered Display (Cards vs Text Only)
+        primary_ids = guidance_data.get("primary_course_ids", [])
+        secondary_ids = guidance_data.get("secondary_course_ids", [])
+        
+        card_courses = []
+        text_only_courses = []
+        
+        # Map IDs back to objects
+        course_map = {str(c.get("course_id")): c for c in grounded_courses}
+        
+        for cid in primary_ids:
+            if cid in course_map:
+                card_courses.append(course_map[cid])
+        
+        for cid in secondary_ids:
+            if cid in course_map:
+                text_only_courses.append(course_map[cid])
+
+        # 2) Enrich response text
         if extracted_skills:
             response_text += "\n\n**Skills extracted:**\n" + ", ".join(extracted_skills)
+
+        if text_only_courses:
+            response_text += "\n\n**Additional relevant topics found in our catalog:**\n"
+            response_text += "\n".join([f"- {c.get('title')}" for c in text_only_courses])
+
+        # 3) Final Cards
+        grounded_courses = card_courses
+
+        # --- UNIVERSAL FALLBACK MECHANISM (Stage 3: Context-Aware Retrieval) ---
+        # If after tiered logic, we still have NO CARDS, we try a desperate contextual search.
+        if not grounded_courses and intent in ["CAREER_GUIDANCE", "SKILL_SEARCH", "SEARCH"]:
+            logger.info(f"Session {session_uuid} | All primary matching failed. Triggering Context-Aware Fallback.")
+            
+            # 1. Determine Fallback Query (Highest priority: Target Role, Second: Keywords, Last: Original Question)
+            fallback_candidates = []
+            if router_out.target_role:
+                fallback_candidates.append(router_out.target_role)
+            if router_out.keywords:
+                fallback_candidates.extend(router_out.keywords[:3])
+            
+            # 2. Retrieve broad results from ANY relevant context
+            fallback_dedup = {}
+            for fq in fallback_candidates[:3]:
+                fallback_results = await retrieve_courses(db, query=fq, top_k=10, filters=None)
+                for c in fallback_results:
+                    cid = str(c.course_id)
+                    if cid not in fallback_dedup:
+                        fallback_dedup[cid] = c.dict()
+            
+            # 3. Apply Relevance Gate (Sanity check to avoid totally random noise)
+            candidate_list = list(fallback_dedup.values())
+            if candidate_list:
+                # Use the target role or message as a gate context
+                gate_context = router_out.target_role or message
+                grounded_courses = _relevance_gate(gate_context, candidate_list)
+                
+                if grounded_courses:
+                    # Mark these as primary so they show up as cards!
+                    coverage_note = "Showing the closest matches found in our catalog for your role."
+                    logger.info(f"Session {session_uuid} | Fallback found {len(grounded_courses)} contextual courses.")
+                else:
+                    coverage_note = "Our catalog currently lacks exact matches. Feel free to explore other career topics!"
 
         # Logging & History (Simplified)
         latency_ms = int((time.time() - start_time) * 1000)

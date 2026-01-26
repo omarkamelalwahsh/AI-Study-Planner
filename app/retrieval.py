@@ -54,17 +54,29 @@ def _canonical_variants(query: str) -> List[str]:
         return []
     toks = _tokenize(q0)
     # Preservation: Keep tokens >= 2 chars (crucial for AI, ML, SQL)
-    cleaned = [t for t in toks if t.lower() not in _AR_NOISE and len(t) >= 2]
+    # Filter out Arabic noise only for the combined phrase
+    cleaned_tokens = [t for t in toks if t.lower() not in _AR_NOISE and len(t) >= 2]
     
-    cleaned_q = " ".join(cleaned).strip()
-
     variants = []
-    # Use both full and cleaned version for better coverage
-    for v in [cleaned_q, q0]:
-        v = _normalize_text(v)
-        if v and len(v) >= 2 and v not in variants:
-            variants.append(v)
-    return variants[:3]
+    
+    # 1. Full cleaned phrase (High precision)
+    full_cleaned = " ".join(cleaned_tokens).strip()
+    if full_cleaned and len(full_cleaned) >= 2:
+        variants.append(full_cleaned)
+        
+    # 2. Original phrase (if different)
+    if q0.lower() != full_cleaned.lower() and len(q0) >= 2:
+        variants.append(q0)
+        
+    # 3. Individual core tokens (High recall fallback)
+    # Only add if we have few variants so far
+    for t in cleaned_tokens:
+        if len(variants) >= 5:
+            break
+        if t not in variants:
+            variants.append(t)
+            
+    return variants[:5]
 
 def _e5_query(text: str) -> str:
     return f"query: {text}"
