@@ -149,12 +149,22 @@ class ErrorDetail(BaseModel):
     message: str
 
 
+
+class ProjectDetail(BaseModel):
+    """Project detail idea."""
+    title: str
+    level: str
+    description: str
+    skills: List[str]
+
+
 class ChatResponse(BaseModel):
     """Chat endpoint response (master prompt API contract)."""
     session_id: str
     intent: str
     answer: str
     courses: List[CourseDetail] = Field(default_factory=list)
+    projects: List[ProjectDetail] = Field(default_factory=list)
     error: Optional[ErrorDetail] = None
     request_id: str
 

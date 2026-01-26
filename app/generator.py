@@ -35,119 +35,94 @@ Output JSON only:
 # ============================================================
 # 2) FINAL RESPONSE RENDERER PROMPT (Layer 6)
 # ============================================================
-FINAL_RENDERER_PROMPT = """You are the Career Guidance Renderer (Final Rendering).
+# ============================================================
+# 3) SKILL EXTRACTION MODE PROMPT (Layer 6 - previously Final Renderer) 
+# ============================================================
+FINAL_RENDERER_PROMPT = """You are Career Copilot – Skill Extraction Mode.
 
-You receive:
-- user_question
-- guidance_plan
-- grounded_courses (already retrieved from catalog)
-- coverage_note (optional)
-- language
+Your ONLY responsibility:
+1) Provide a short, practical explanation of the role or goal.
+2) Extract the key professional skills required.
 
-STRICT RULES:
-1) Use ONLY grounded_courses. Never invent courses or external resources.
-2) Do NOT “justify” irrelevant courses. If a course does not clearly help with the user's goal, exclude it from the response.
-3) If grounded_courses is empty after filtering, say the catalog currently has no relevant courses ONCE, then provide conceptual guidance only.
-4) Never show internal errors or "No courses found for X".
-5) If only one relevant course exists, show it once and list the key areas it supports.
+========================
+STRICT RULES
+========================
+- Respond in the SAME language as the user.
+- If Arabic input → Arabic response.
+- Skills MUST be written in ENGLISH ONLY.
+- Skills must be concrete, professional, and searchable terms (1–2 words).
+- DO NOT recommend courses.
+- DO NOT mention course names.
+- DO NOT suggest learning paths or categories.
+- Avoid soft skills unless the role itself is non-technical.
 
-RELEVANCE TEST:
-Include a course only if a professional pursuing this goal would reasonably benefit from it.
-
-PRESENTATION:
-- Mirror user language.
-- Start with guidance (short).
-- Then list courses grouped by category.
-- It is OK to list many courses as long as all are clearly relevant.
-- If too many (>20 total), show first 10 per category and say "يوجد المزيد" / "More available".
-
-Output: user-facing text only.
+========================
+OUTPUT FORMAT (JSON ONLY)
+========================
+{
+  "text": "شرح مختصر وعملي للدور",
+  "skills": ["Skill1", "Skill2", "Skill3"]
+}
 """
 
-def _relevance_gate(user_question: str, courses: List[Dict]) -> List[Dict]:
-    """Deterministic filter to remove domain-mismatched noise."""
-    q = (user_question or "").lower()
+# ============================================================
+# 4) PROJECT IDEAS GENERATOR PROMPT (Layer 7 - New Feature)
+# ============================================================
+PROJECT_IDEAS_PROMPT = """You are Career Copilot – Project Ideas Generator.
 
-    # Lightweight role/domain inference from question
-    technical = any(x in q for x in [
-        "data scientist", "data science", "machine learning", "ml", "ai",
-        "backend", "frontend", "developer", "engineer", "python", "sql",
-        "علم البيانات", "ذكاء", "تعلم الآلة", "برمجة", "بايثون", "داتاساينس"
-    ])
-    manager = any(x in q for x in [
-        "manager", "lead", "leadership", "مدير", "قيادة", "إدارة", "تيم", "فريق"
-    ])
+The user has already received relevant courses.
+Your task is to suggest practical project ideas related to the user's original goal.
 
-    # Hard reject lists (high-signal, avoid false positives)
-    reject_if_manager = ["mysql", "html", "css", "javascript", "react", "adobe", "after effects", "illustrator", "indesign"]
-    reject_if_technical = ["hygiene", "renewable energy", "after effects", "illustrator", "indesign", "graphic design", "social media marketing"]
+========================
+RULES
+========================
+- Generate EXACTLY 3 project ideas.
+- Projects must be directly related to the user's original goal.
+- Use increasing difficulty levels:
+  1) Beginner
+  2) Intermediate
+  3) Advanced
+- Projects must be practical and skill-based.
+- NO life advice.
+- NO generic projects.
+- Stay within professional / technical scope.
+- Respond in the SAME language as the user.
 
-    filtered = []
-    for c in courses:
-        title = (c.get("title") or "").lower()
-        category = (c.get("category") or "").lower()
-        blob = f"{title} {category}"
+========================
+PROJECT FORMAT
+========================
+For each project include:
+- Title
+- Level
+- Description (2–3 lines)
+- Main skills used (ENGLISH)
 
-        # Manager: reject tool-specific technical/design noise
-        if manager and any(k in blob for k in reject_if_manager):
-            continue
-
-        # Technical role: reject obvious non-tech noise
-        if technical and any(k in blob for k in reject_if_technical):
-            continue
-
-        filtered.append(c)
-
-    return filtered
-
-from datetime import datetime
-
-def _json_serial(obj):
-    """JSON serializer for objects not serializable by default json code"""
-    if isinstance(obj, datetime):
-        return obj.isoformat()
-    raise TypeError ("Type %s not serializable" % type(obj))
-
-def generate_guidance_plan(
-    user_question: str,
-    router_output: Any
-) -> Dict[str, Any]:
-    """Layer 2: Generate high-level guidance plan (no courses)."""
-    client = Groq(api_key=settings.groq_api_key)
-    
-    # Prepare input for LLM
-    input_data = {
-        "user_question": user_question,
-        "router_output": {
-            "intent": router_output.intent,
-            "user_goal": router_output.user_goal,
-            "target_role": router_output.target_role,
-            "role_type": router_output.role_type,
-            "language": router_output.user_language
-        }
+========================
+OUTPUT FORMAT (JSON ONLY)
+========================
+{
+  "projects": [
+    {
+      "title": "",
+      "level": "Beginner",
+      "description": "",
+      "skills": []
+    },
+    {
+      "title": "",
+      "level": "Intermediate",
+      "description": "",
+      "skills": []
+    },
+    {
+      "title": "",
+      "level": "Advanced",
+      "description": "",
+      "skills": []
     }
-    
-    try:
-        response = client.chat.completions.create(
-            model=settings.groq_model,
-            messages=[
-                {"role": "system", "content": GUIDANCE_PLANNER_PROMPT},
-                {"role": "user", "content": json.dumps(input_data, ensure_ascii=False, default=_json_serial)}
-            ],
-            temperature=0.7, # Slightly creative for guidance
-            max_tokens=600,
-            response_format={"type": "json_object"},
-            timeout=settings.groq_timeout_seconds
-        )
-        content = response.choices[0].message.content
-        return json.loads(content)
-    except Exception as e:
-        logger.error(f"Guidance Planner failed: {e}")
-        # Fallback plan
-        return {
-            "guidance_intro": "Here is a general guide for your career goal.",
-            "core_areas": []
-        }
+  ]
+}
+"""
 
 def generate_final_response(
     user_question: str,
@@ -155,29 +130,20 @@ def generate_final_response(
     grounded_courses: List[Dict],
     language: str,
     coverage_note: str = None
-) -> str:
-    """Layer 6: Generate final user-facing text."""
+) -> Dict[str, Any]:
+    """
+    Layer 6: Generate final response - NOW Skill Extraction Mode.
+    Returns JSON { "text": "...", "skills": [...] }
+    """
     client = Groq(api_key=settings.groq_api_key)
     
-    # 1. Deterministic Relevance Gate (Safety Barrier)
-    grounded_courses = _relevance_gate(user_question, grounded_courses)
+    # Input data minimal for this mode
+    # We still pass courses but the Prompt is told NOT to use them? 
+    # Wait, the prompt says "Your ONLY responsibility... DO NOT recommend courses."
+    # So we don't strictly need courses in the prompt but we keep signature compatible.
     
-    # 2. Clean course data for LLM context
-    clean_courses = []
-    for c in grounded_courses:
-        clean_courses.append({
-            "title": c.get("title"),
-            "level": c.get("level"),
-            "instructor": c.get("instructor"),
-            "category": c.get("category"),
-            "supported_skills": c.get("supported_skills", [])
-        })
-
     input_data = {
         "user_question": user_question,
-        "guidance_plan": guidance_plan,
-        "grounded_courses": clean_courses,
-        "coverage_note": coverage_note,
         "language": language
     }
     
@@ -188,12 +154,49 @@ def generate_final_response(
                 {"role": "system", "content": FINAL_RENDERER_PROMPT},
                 {"role": "user", "content": json.dumps(input_data, ensure_ascii=False, default=_json_serial)}
             ],
-            temperature=0.5,
-            max_tokens=1500,
+            temperature=0.3, # Low temp for extraction and structured output
+            max_tokens=800,
+            response_format={"type": "json_object"},
             timeout=settings.groq_timeout_seconds
         )
-        return response.choices[0].message.content
+        content = response.choices[0].message.content
+        return json.loads(content)
     except Exception as e:
-        logger.error(f"Final Renderer failed: {e}")
-        return "Sorry, I encountered an error generating your response."
+        logger.error(f"Skill Extraction Mode failed: {e}")
+        return {
+            "text": "Sorry, I could not process the request details at this moment.",
+            "skills": []
+        }
+
+def generate_project_ideas(
+    user_question: str,
+    language: str
+) -> Dict[str, Any]:
+    """
+    Layer 7: Generate Project Ideas.
+    """
+    client = Groq(api_key=settings.groq_api_key)
+    
+    input_data = {
+        "user_question": user_question,
+        "language": language
+    }
+    
+    try:
+        response = client.chat.completions.create(
+            model=settings.groq_model,
+            messages=[
+                {"role": "system", "content": PROJECT_IDEAS_PROMPT},
+                {"role": "user", "content": json.dumps(input_data, ensure_ascii=False, default=_json_serial)}
+            ],
+            temperature=0.6,
+            max_tokens=1000,
+            response_format={"type": "json_object"},
+            timeout=settings.groq_timeout_seconds
+        )
+        content = response.choices[0].message.content
+        return json.loads(content)
+    except Exception as e:
+        logger.error(f"Project Generator failed: {e}")
+        return {"projects": []}
 

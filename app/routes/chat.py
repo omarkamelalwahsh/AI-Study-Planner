@@ -12,7 +12,7 @@ import uuid
 import logging
 from app.router import classify_intent, GroqUnavailableError
 from app.retrieval import retrieve_courses, generate_search_plan, execute_and_group_search
-from app.generator import generate_guidance_plan, generate_final_response
+from app.generator import generate_guidance_plan, generate_final_response, generate_project_ideas
 from app.skills import extract_skills_and_areas
 from app.utils.normalization import normalize_text, wants_courses, detect_language
 
@@ -65,7 +65,7 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
                 "plan": [
                     {
                         "canonical_en": s.get("canonical_en"),
-                        "primary_queries": [s.get("canonical_en")] + (s.get("queries") if s.get("queries") else []),
+                        "primary_queries": [s.get("canonical_en")] + s.get("primary_queries", []) + s.get("fallback_queries", []),
                         "limit_per_query": 5
                     } for s in skills_data.get("skills_or_areas", [])
                 ]
@@ -116,8 +116,8 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
                 "core_areas": []
             }
 
-        # Step 7: Final Renderer
-        response_text = generate_final_response(
+        # Step 7: Final Renderer -> Skill Extraction Mode
+        guidance_data = generate_final_response(
             user_question=message,
             guidance_plan=guidance_plan,
             grounded_courses=grounded_courses,
@@ -125,6 +125,23 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
             coverage_note=coverage_note
         )
         
+        # New Feature: Project Ideas
+        # We only generate projects if we found courses/intent is valid
+        project_data = {"projects": []}
+        if intent == "CAREER_GUIDANCE":
+             project_data = generate_project_ideas(message, router_out.user_language)
+
+        response_text = guidance_data.get("text", "")
+        # You might want to append skills to the text if the UI doesn't display them separately
+        # But per user request "UI will display Cards", so we assume UI handles structured data or we just send text.
+        # User said: "Output: Definition, Skills, Course Cards".
+        # If UI expects markdown skills in 'answer', we might need to append them.
+        # "UI displays: Definition, Skills..."
+        # Let's append skills to text to be safe for a generic markdown UI
+        extracted_skills = guidance_data.get("skills", [])
+        if extracted_skills:
+            response_text += "\n\n**Skills extracted:**\n" + ", ".join(extracted_skills)
+
         # Logging & History (Simplified)
         latency_ms = int((time.time() - start_time) * 1000)
         
@@ -166,12 +183,24 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
                 skills=c.get("skills")[:100] if c.get("skills") else None,
                 cover=c.get("cover")
             ))
+            
+        # Convert projects to schema
+        from app.models import ProjectDetail
+        api_projects = []
+        for p in project_data.get("projects", []):
+            api_projects.append(ProjectDetail(
+                title=p.get("title"),
+                level=p.get("level"),
+                description=p.get("description"),
+                skills=p.get("skills", [])
+            ))
 
         return ChatResponse(
             session_id=str(session_uuid),
             intent=intent,
             answer=response_text,
             courses=api_courses,
+            projects=api_projects,
             request_id=str(uuid.uuid4())
         )
 
