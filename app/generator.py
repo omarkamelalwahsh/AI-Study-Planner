@@ -129,6 +129,14 @@ in the role or skill the user asked about?”
 If NO → exclude it.
 
 ==================================================
+SKILL EXTRACTION RULES (NORMALIZATION)
+==================================================
+1. QUANTITY: Extract EXACTLY 4-6 skills.
+2. LANGUAGE: Skills MUST be in ENGLISH regardless of conversation language.
+3. QUALITY: Choose core, job-relevant, and widely recognized skills.
+4. UNIQUE: No duplicates or redundant variations.
+
+==================================================
 COURSE JUDGMENT & TIERED DISPLAY (IMPORTANT)
 ==================================================
 You will be provided with a list of candidate courses.
@@ -141,23 +149,22 @@ Your job is to categorize them into two tiers:
 
 2. SECONDARY (Text Only):
    - Courses that are supporting, complementary, or broadly related but not core.
-   - For a "Data Scientist", this might be general Programming basics (C#), Hacking, or Soft Skills.
    - These will be mentioned briefly in text.
 
 Rules:
-- Be strict. If a course is loosely related, move it to Secondary.
-- If a course is totally unrelated (bad retrieval), exclude its ID from BOTH lists.
+- NO COURSE is allowed unless it clearly supports at least ONE extracted skill.
+- DOMAIN SANITY (BLACKLIST):
+  - If Role = Tech/Data: No Design, HR, or Customer Service.
+  - If Role = Design: No Programming or Hacking.
+- If no direct course matches are found, you MUST still recommend the closest relevant courses that support the same skill domain. Never leave the user with no courses.
 - Do NOT limit the number of recommended courses in either tier.
-- Show ALL courses that clearly match the extracted or complementary skills.
-
-**If no direct course matches are found, you MUST still recommend the closest relevant courses that support the same skill domain. Never leave the user with no courses.**
 
 ==================================================
 OUTPUT STRUCTURE (JSON ONLY)
 ==================================================
 {
-  "text": "Short explanation of the role or skill (in User Language)",
-  "skills": ["Skill1 (ENGLISH)", "Skill2 (ENGLISH)"],
+  "text": "Short explanation (User Language)",
+  "skills": ["Skill1 (ENGLISH)", "Skill2 (ENGLISH)", "Skill3 (ENGLISH)", "Skill4 (ENGLISH)"],
   "primary_course_ids": ["ID1", "ID2"],
   "secondary_course_ids": ["ID3", "ID4"]
 }

@@ -1,6 +1,7 @@
 """
 Chat endpoint - main RAG pipeline with 7-Step Career Guidance Flow.
 """
+from typing import List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -23,6 +24,31 @@ from app.utils.normalization import normalize_text, wants_courses, detect_langua
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# Domain Blacklist to prevent cross-domain hallucinations (10/10 Plan)
+DOMAIN_BLACKLIST = {
+    "technical": ["Graphic Design", "Digital Media", "Health & Wellness", "Banking Skills", "Customer Service", "Human Resources"],
+    "design": ["Programming", "Hacking", "Data Security", "Networking", "Banking Skills", "Technology Applications"],
+    "soft_skills": ["Programming", "Hacking", "Data Security", "Networking", "Web Development", "Mobile Development"]
+}
+
+def is_blacklisted(role_type: str, category: str) -> bool:
+    if not role_type or not category:
+        return False
+    # Map role_type to blacklist key
+    key = role_type.lower()
+    if key in DOMAIN_BLACKLIST:
+        return category in DOMAIN_BLACKLIST[key]
+    return False
+
+def hard_skill_gate(course: Dict, skills: List[str]) -> bool:
+    """A course MUST mention at least one skill keyword to pass."""
+    text = (str(course.get("title", "")) + " " + str(course.get("category", ""))).lower()
+    for s in skills:
+        keywords = [kw for kw in s.lower().split() if len(kw) >= 2] # Allow AI, ML, SQL
+        if any(kw in text for kw in keywords):
+            return True
+    return False
 
 @router.post("/chat", response_model=ChatResponse, responses={503: {"model": ErrorResponse}})
 async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
@@ -57,6 +83,9 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
         grounded_courses = []
         coverage_note = None
         
+# -----------------------
+# Chat API
+# -----------------------
         # --- PATH A: CAREER GUIDANCE (The 7-Step Multi-Layer Flow) ---
         if intent == "CAREER_GUIDANCE":
             # Step 2: Guidance Planner (Stage 1)
@@ -138,12 +167,16 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
         # New Feature: Project Ideas
         # We only generate projects if we found courses/intent is valid
         project_data = {"projects": []}
-        if intent == "CAREER_GUIDANCE":
+        if intent in ["CAREER_GUIDANCE", "SEARCH", "FOLLOW_UP", "SKILL_SEARCH"]:
              project_data = generate_project_ideas(message, router_out.user_language)
 
         response_text = guidance_data.get("text", "")
-        extracted_skills = guidance_data.get("skills", [])
-        
+        # Normalize Skills: Unique, Cap 4-6
+        extracted_skills = list(dict.fromkeys(guidance_data.get("skills", [])))[:6]
+        if len(extracted_skills) < 4 and intent == "CAREER_GUIDANCE":
+            # Just keeping what we have if LLM returned fewer, but capping at max 6.
+            pass
+
         # 1) LLM-based Tiered Display (Cards vs Text Only)
         primary_ids = guidance_data.get("primary_course_ids", [])
         secondary_ids = guidance_data.get("secondary_course_ids", [])
@@ -154,13 +187,31 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
         # Map IDs back to objects
         course_map = {str(c.get("course_id")): c for c in grounded_courses}
         
-        for cid in primary_ids:
+        # Role Type for Blacklist
+        role_type = router_out.role_type or "non_technical"
+        target_role_lower = (router_out.target_role or "").lower()
+        if any(x in target_role_lower for x in ["data", "scientist", "engineer", "developer", "backend"]):
+            role_type = "technical"
+        elif any(x in target_role_lower for x in ["designer", "ui", "ux", "creative"]):
+            role_type = "design"
+        elif any(x in target_role_lower for x in ["manager", "lead", "soft skills", "communication"]):
+            role_type = "soft_skills"
+
+        # Categorize with Hard Gate + Blacklist
+        all_candidate_ids = primary_ids + secondary_ids
+        for cid in all_candidate_ids:
             if cid in course_map:
-                card_courses.append(course_map[cid])
-        
-        for cid in secondary_ids:
-            if cid in course_map:
-                text_only_courses.append(course_map[cid])
+                course = course_map[cid]
+                # Guard 1: Blacklist (Hard Stop)
+                if is_blacklisted(role_type, course.get("category")):
+                    continue
+                # Guard 2: Hard Skill Gate (No Skill = No Course)
+                if hard_skill_gate(course, extracted_skills):
+                    if cid in primary_ids:
+                        card_courses.append(course)
+                    else:
+                        text_only_courses.append(course)
+                # If it fails the gate, it's not shown AT ALL (10/10 Rule)
 
         # 2) Enrich response text
         if extracted_skills:

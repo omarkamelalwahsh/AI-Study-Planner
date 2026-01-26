@@ -117,7 +117,8 @@ Return JSON only:
   "target_role": "short or empty",
   "role_type": "technical|non_technical|mixed",
   "language": "ar|en|mixed",
-  "search_scope": "ALL_CATEGORIES"
+  "search_scope": "ALL_CATEGORIES",
+  "keywords": ["Skill1 (ENGLISH)", "Skill2 (ENGLISH)"]
 }
 """
 
