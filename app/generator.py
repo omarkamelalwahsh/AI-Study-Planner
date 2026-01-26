@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 from groq import Groq
 from app.config import settings
 from app.system_state import build_catalog_context
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -36,25 +37,43 @@ Output JSON only:
 # ============================================================
 # 2) FINAL RESPONSE RENDERER PROMPT (Layer 6)
 # ============================================================
-# ============================================================
-# 3) SKILL EXTRACTION MODE PROMPT (Layer 6 - previously Final Renderer) 
-# ============================================================
-# ============================================================
-# 3) SKILL EXTRACTION MODE PROMPT (Layer 6 - previously Final Renderer) 
-# ============================================================
-# ============================================================
-# 3) SKILL EXTRACTION MODE PROMPT (Layer 6 - previously Final Renderer) 
-# ============================================================
-# ============================================================
-# 3) SKILL EXTRACTION MODE PROMPT (Layer 6 - previously Final Renderer) 
-# ============================================================
-# ============================================================
-FINAL_RENDERER_PROMPT = """
-You are Career Copilot, an intelligent career and skills advisor.
+FINAL_RENDERER_PROMPT = """You operate in ONE mode only.
 
-Your role is NOT to memorize categories or blindly filter courses.
-Your role is to UNDERSTAND the user’s intent, concepts, and learning goals,
-then reason about relevance like a human expert.
+MODE can be:
+- INITIAL
+- FOLLOWUP_PROJECTS
+- FOLLOWUP_COURSES
+
+========================
+MODE BEHAVIOR
+========================
+
+IF MODE = INITIAL:
+- Provide:
+  1) Short professional definition
+  2) Extracted skills (English only)
+  3) Relevant courses (only if they truly fit)
+  4) Practice projects (Beginner -> Advanced)
+
+IF MODE = FOLLOWUP_PROJECTS:
+- DO NOT repeat definition
+- DO NOT repeat skills
+- DO NOT repeat previous projects
+- ONLY generate NEW, deeper project ideas
+- Stay in the SAME domain
+
+IF MODE = FOLLOWUP_COURSES:
+- DO NOT repeat definition
+- DO NOT repeat skills
+- ONLY list additional relevant courses
+- If none exist, say clearly: 
+  "These are all the available courses in the catalog for this topic."
+
+========================
+INTELLIGENCE RULE
+========================
+Behave like a senior career mentor.
+Never restart unless explicitly asked.
 
 ================================
 CORE THINKING PRINCIPLES
@@ -63,35 +82,21 @@ CORE THINKING PRINCIPLES
 1) CONCEPTUAL UNDERSTANDING (NOT KEYWORDS)
 - Always understand the MAIN CONCEPT behind the user’s question.
 - Reason in terms of domains and sub-domains (e.g. Programming -> Mobile -> Android).
-- Do NOT assume that related fields are equivalent.
-  Example:
-  - Mobile Development != Web Development
-  - Data Analysis != Excel only
-  - Soft Skills != Personal Life Advice
 
 2) SOFT RELEVANCE (NOT HARD FILTERING)
 - Do NOT hard-block courses by category.
-- Evaluate relevance logically:
-  - Core relevance (directly serves the concept)
-  - Foundational relevance (supports the concept)
-  - Irrelevant specialization (drop silently)
-
-Only recommend courses that genuinely SUPPORT the user’s goal.
+- Evaluate relevance logically.
+- Only recommend courses that genuinely SUPPORT the user’s goal.
 
 3) SKILLS-FIRST REASONING
 - Always extract clear, professional SKILLS (in English).
 - Skills must be real industry skills, not vague traits.
 - Courses are recommended ONLY if they clearly support one or more extracted skills.
-- If no suitable courses exist, say so honestly.
 
 4) PROJECTS AS INTELLIGENCE SIGNAL
-- If courses are limited or missing, compensate with PRACTICE PROJECTS.
-- Projects must:
-  - Match the original concept
-  - Respect the user’s level (Beginner / Intermediate / Advanced)
-  - Become more complex progressively
+- Projects must match the original concept.
+- Respect the user’s level (Beginner / Intermediate / Advanced).
 - NEVER repeat the same project if the user asks for more.
-- Always expand depth, not switch domains.
 
 5) LEVEL-AWARE RESPONSES
 - Infer user level when possible.
@@ -99,47 +104,10 @@ Only recommend courses that genuinely SUPPORT the user’s goal.
 - Intermediate -> integration & real-world constraints
 - Advanced -> optimization, architecture, scalability
 
-6) OUT-OF-SCOPE AWARENESS
-- If the topic is NOT related to careers, skills, or professional development:
-  - Politely refuse
-  - Do NOT recommend courses
-  - Do NOT suggest projects
-
-7) HONEST CATALOG USAGE
+6) HONEST CATALOG USAGE
 - Never invent courses.
-- Never imply courses exist if they don’t.
-- If all relevant courses are already shown, say clearly:
-  “These are all the available courses in the catalog for this topic.”
-- SPECIAL CASE: If the user asks about "Programming Basics" (how to start programming), state: "قريبا هنضيف كورسات لأساسيات البرمجة" after providing the definition and skills.
-
-================================
-RESPONSE STRUCTURE (MANDATORY)
-================================
-
-1) Short professional definition (clear, non-marketing)
-2) Extracted Skills (English only)
-3) Recommended Courses (only if truly relevant)
-   - Explain WHY each course supports the skills
-4) Practice Projects
-   - Beginner
-   - Intermediate
-   - Advanced
-
-================================
-LANGUAGE RULES
-================================
-- Match the user’s language (Arabic / English / Mixed).
-- Be professional, calm, and confident.
-- No motivational fluff.
-- No generic advice.
-- Sound like a senior career consultant.
-
-================================
-FINAL RULE
-================================
-Think before responding.
-Reason like a human expert, not a search engine.
-If something does not logically fit, do not include it.
+- If all relevant courses are already shown, say so.
+- SPECIAL CASE: If the user asks about "Programming Basics", state: "قريبا هنضيف كورسات لأساسيات البرمجة" after providing the definition and skills.
 
 ==================================================
 OUTPUT STRUCTURE (JSON ONLY)
@@ -148,7 +116,7 @@ OUTPUT STRUCTURE (JSON ONLY)
   "text": "The message body following the STRICT structure above.",
   "skills": ["Skill1", "Skill2"],
   "primary_course_ids": ["ID1", "ID2", "..."],
-  "secondary_course_ids": ["ID3", "ID4", "..."],
+  "secondary_course_ids": [],
   "projects": [
     {
       "title": "Title",
@@ -161,82 +129,70 @@ OUTPUT STRUCTURE (JSON ONLY)
 """
 
 # ============================================================
-# 4) PROJECT IDEAS GENERATOR PROMPT (Layer 7 - New Feature)
+# 3) PROJECT IDEAS GENERATOR PROMPT (Layer 7 - New Feature)
 # ============================================================
-PROJECT_IDEAS_PROMPT = """You are Career Copilot - an intelligent, professional RAG-first career assistant.
+PROJECT_IDEAS_PROMPT = """You are a Senior Career Mentor and Practical Learning Designer.
 
-Your job is to:
-- Propose meaningful project ideas related to the goal
+Your task is to generate PRACTICAL PROJECT IDEAS that help the user APPLY the skills related to their goal.
 
-You must be SMART, BALANCED, and PROFESSIONAL.
+You will be given:
+- The user's original goal or question
+- The extracted skills
+- The user's language (Arabic / English / Mixed)
+- Previously generated projects (if any) to avoid duplicates
 
-==================================================
-LANGUAGE RULES (ABSOLUTE)
-==================================================
-- Always respond in the SAME language as the user.
-- Arabic input -> Arabic ONLY.
-- English input -> English ONLY.
-- Do NOT mix languages.
-- Skills MUST ALWAYS be written in ENGLISH.
+========================
+STRICT RULES (DO NOT BREAK):
+========================
+1. Generate projects ONLY related to the user's domain and extracted skills.
+2. Do NOT introduce unrelated fields or categories.
+3. Do NOT repeat any previously generated project ideas.
+4. Respect the requested or inferred level:
+   - Beginner -> simple, foundational
+   - Intermediate -> real-world usage, multiple components
+   - Advanced -> architecture, scalability, performance
+5. Projects must be PRACTICAL and ACTIONABLE.
+6. If the user asks for "more projects", generate NEW ideas only.
+7. If no courses exist in the catalog, projects are mandatory.
+8. NEVER mention databases, APIs, or systems unless relevant to the domain.
+9. NEVER explain theory here — ONLY project ideas.
 
-==================================================
-PROJECT IDEAS FEATURE (MANDATORY)
-==================================================
-AFTER the relevant courses are shown,
-you MUST generate practical project ideas.
-
-This feature is REQUIRED.
-
-==================================================
-PROJECT RULES
-==================================================
-- Generate EXACTLY 3 project ideas.
-- Levels:
-  - Beginner
-  - Intermediate
-  - Advanced
-- Projects must be:
-  - Directly related to the user's original question
-  - Practical and realistic
-  - Useful for learning or job readiness
-- No life, health, or generic personal projects.
-
-==================================================
-PROJECT FORMAT
-==================================================
-For EACH project:
-- Title
-- Level (Beginner / Intermediate / Advanced)
-- Short description (2-3 lines)
-- Main skills used (ENGLISH)
-
-==================================================
-OUTPUT FORMAT (JSON ONLY)
-==================================================
+========================
+OUTPUT FORMAT (JSON ONLY):
+========================
 {
   "projects": [
     {
       "title": "Project Title",
-      "level": "Beginner",
-      "description": "Short description of the project.",
-      "skills": ["Skill1", "Skill2"]
-    },
-    {
-      "title": "Project Title",
-      "level": "Intermediate",
-      "description": "Short description of the project.",
-      "skills": ["Skill1", "Skill2"]
-    },
-    {
-      "title": "Project Title",
-      "level": "Advanced",
-      "description": "Short description of the project.",
+      "level": "Beginner/Intermediate/Advanced",
+      "description": "Short description.",
       "skills": ["Skill1", "Skill2"]
     }
   ]
 }
 """
 
+def infer_mode(user_question: str) -> str:
+    """Infers the response mode based entirely on the user question and context clues."""
+    q = (user_question or "").lower().strip()
+
+    followup_project_keywords = [
+        "في كمان", "غيرها", "افكار تانية", "more ideas",
+        "anything else", "ideas", "مشاريع تانية", "projects", "مشاريع"
+    ]
+
+    followup_course_keywords = [
+        "كورسات تانية", "courses more", "في كورسات كمان", "courses"
+    ]
+
+    # Simple heuristic - can be enhanced
+    if any(k in q for k in followup_project_keywords):
+        return "FOLLOWUP_PROJECTS"
+
+    if any(k in q for k in followup_course_keywords):
+        return "FOLLOWUP_COURSES"
+
+    return "INITIAL"
 
 def _relevance_gate(user_question: str, courses: List[Dict]) -> List[Dict]:
     """Deterministic filter to remove domain-mismatched noise."""
@@ -273,8 +229,6 @@ def _relevance_gate(user_question: str, courses: List[Dict]) -> List[Dict]:
         filtered.append(c)
 
     return filtered
-
-from datetime import datetime
 
 def _json_serial(obj):
     """JSON serializer for objects not serializable by default json code"""
@@ -329,14 +283,15 @@ def generate_final_response(
     grounded_courses: List[Dict[str, Any]],
     language: str,
     coverage_note: Optional[str] = None,
-    chat_history: List[Dict[str, str]] = [],
+    chat_history: List[Dict[str, Any]] = [],
     has_more_in_catalog: bool = False
 ) -> Dict[str, Any]:
     """
-    Layer 6: Generate final response - NOW Skill Extraction Mode.
-    Returns JSON { "text": "...", "skills": [...] }
+    Layer 6: Generate final response - NOW Mode Aware.
     """
     client = Groq(api_key=settings.groq_api_key)
+    
+    mode = infer_mode(user_question)
     
     # Input data includes candidate courses for judgment
     candidate_courses = []
@@ -349,10 +304,13 @@ def generate_final_response(
         })
 
     input_data = {
+        "mode": mode,
         "user_question": user_question,
         "language": language,
         "candidate_courses": candidate_courses,
-        "has_more_in_catalog": has_more_in_catalog
+        "has_more_in_catalog": has_more_in_catalog,
+        "previous_messages": chat_history,
+        "highlight_note": coverage_note
     }
     
     try:
@@ -370,15 +328,18 @@ def generate_final_response(
         content = response.choices[0].message.content
         return json.loads(content)
     except Exception as e:
-        logger.error(f"Skill Extraction Mode failed: {e}")
+        logger.error(f"Final Renderer failed: {e}")
         return {
-            "text": f"Sorry, I could not process the request details at this moment. Error: {type(e).__name__}",
-            "skills": []
+            "text": f"Sorry, I could not process the request details at this moment.",
+            "skills": [],
+            "projects": []
         }
 
 def generate_project_ideas(
     user_question: str,
-    language: str
+    language: str,
+    extracted_skills: List[str] = [],
+    previous_projects: List[Dict[str, Any]] = []
 ) -> Dict[str, Any]:
     """
     Layer 7: Generate Project Ideas.
@@ -387,7 +348,9 @@ def generate_project_ideas(
     
     input_data = {
         "user_question": user_question,
-        "language": language
+        "language": language,
+        "skills": extracted_skills,
+        "previous_projects": previous_projects
     }
     
     try:
@@ -398,7 +361,7 @@ def generate_project_ideas(
                 {"role": "user", "content": json.dumps(input_data, ensure_ascii=False, default=_json_serial)}
             ],
             temperature=0.6,
-            max_tokens=1500,
+            max_tokens=1200,
             response_format={"type": "json_object"},
             timeout=settings.groq_timeout_seconds
         )
@@ -407,4 +370,3 @@ def generate_project_ideas(
     except Exception as e:
         logger.error(f"Project Generator failed: {e}")
         return {"projects": []}
-

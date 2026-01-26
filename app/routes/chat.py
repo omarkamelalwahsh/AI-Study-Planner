@@ -22,6 +22,7 @@ from app.generator import (
 )
 from app.skills import extract_skills_and_areas
 from app.utils.normalization import normalize_text, wants_courses, detect_language
+from app.followup_manager import FollowupManager, generate_dynamic_projects, update_session_context
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -124,6 +125,32 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
 # -----------------------
 # Chat API
 # -----------------------
+
+
+# -----------------------
+# Chat API
+# -----------------------
+        # STEP 0: FOLLOW-UP MANAGER (Bypass Retrieval?)
+        # -----------------------------
+        if FollowupManager.should_rerun_retrieval(message, str(session_uuid)) is False:
+             # Logic: It IS a follow-up ("more projects") AND we have context.
+             # 1. Infer Level (e.g. "Harder", "Easier")
+            requested_level = FollowupManager.infer_requested_level(message)
+            
+            # 2. Dynamic Project Generation (No RAG needed)
+            new_projects = generate_dynamic_projects(str(session_uuid), requested_level)
+            
+            # Construct a simple direct response
+            return ChatResponse(
+                session_id=str(session_uuid),
+                intent="FOLLOW_UP",
+                answer="Here are some additional project ideas for you:",
+                skills=[],
+                primary_courses=[], # Explicitly empty as requested
+                secondary_courses=[],
+                projects=new_projects,
+                request_id=str(uuid.uuid4())
+            )
         # --- PATH A: CAREER GUIDANCE (The 7-Step Multi-Layer Flow) ---
         if intent == "CAREER_GUIDANCE":
             # Step 2: Guidance Planner (Stage 1)
@@ -160,7 +187,23 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
             if not grounded_courses:
                 coverage_note = "Our current catalog lacks direct matches for these specific skills."
 
-        # --- PATH B: STANDARD SEARCH / OTHER ---
+        # --- PATH B: FOLLOW-UP FALLBACK (Context Lost) ---
+        elif intent == "FOLLOW_UP" or (FollowupManager.is_followup(message) and not grounded_courses):
+            # We detected a follow-up intent ("More ideas") but 'should_rerun_retrieval' 
+            # returned True (likely because context.last_topic was None).
+            # OR we fell through standard search with no results but it looked like a "more" request.
+            # Instead of searching for "more", we ask for clarification.
+            return ChatResponse(
+                session_id=str(session_uuid),
+                intent=intent,
+                answer="I'd love to help with more ideas! Could you remind me which topic or role you're focusing on? (e.g., 'More Python projects' or 'More Marketing ideas')",
+                skills=[],
+                courses=[],
+                projects=[],
+                request_id=str(uuid.uuid4())
+            )
+
+        # --- PATH C: STANDARD SEARCH / OTHER ---
         else:
             is_yes = any(x in message.lower() for x in ["ايوه", "أيوة", "نعم", "طبعا", "yes", "sure", "ok"])
             is_no = any(x in message.lower() for x in ["لأ", "لا", "شكرا", "no", "thanks"])
@@ -363,6 +406,22 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
                 description=description,
                 skills=p.get("skills", [])
             ))
+
+        # Save Session Context for Follow-up Manager
+        # We save skills from skills_data if available
+        extracted_skills = []
+        if intent == "CAREER_GUIDANCE" and vars().get("skills_data"):
+            # Flatten skills from data
+            for s in skills_data.get("skills_or_areas", []):
+                extracted_skills.append(s.get("canonical_en"))
+        
+        update_session_context(
+            str(session_uuid), 
+            topic=router_out.target_role or (router_out.keywords[0] if router_out.keywords else "General"), 
+            role_type=role_type, 
+            projects=guidance_data.get("projects", []),
+            skills=extracted_skills
+        )
 
         return ChatResponse(
             session_id=str(session_uuid),

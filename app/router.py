@@ -25,11 +25,10 @@ ALLOWED_CATEGORIES = [
 # -----------------------
 # Local fast detectors
 # -----------------------
-# FOLLOW_UP: "هل في غيرهم؟" + variants, not exact match
-_FOLLOW_UP_RE = re.compile(
-    r"(?:^|\s)(هل\s*في\s*(?:غيرهم|غيره|كمان)|في\s*(?:غيرهم|غيره|كمان)|غيرهم|غيره|كمان|any\s+more|show\s+more|more)(?:\s|$)",
-    re.IGNORECASE
-)
+from app.followup_manager import FOLLOW_UP_RE
+
+# FOLLOW_UP: Use shared regex
+_FOLLOW_UP_RE = FOLLOW_UP_RE
 
 # AVAILABILITY: "هل ليها كورسات؟" + variants
 _AVAIL_RE = re.compile(
@@ -112,9 +111,16 @@ Rules:
 - For technical goals (Data Scientist, ML, Backend, Python, etc.), set role_type="technical".
 - Do NOT restrict retrieval to a single category. Set search_scope="ALL_CATEGORIES".
 
+INTENT MAPPING RULES:
+- "What is [Skill]?", "Define [Concept]", "Tell me about [Role]": ALWAYS classified as "career_guidance" (User wants to learn about it).
+- "How to learn [Skill]?", "Roadmap for [Role]": ALWAYS classified as "career_guidance".
+- "Do you have courses for [Skill]?": CLASSIFIED as "availability_check" or "course_lookup".
+- "Hi", "Hello", "Thanks": CLASSIFIED as "chit_chat".
+- "More ideas", "Others", "Give me more": CLASSIFIED as "follow_up" (Logic will handle this).
+
 Return JSON only:
 {
-  "intent": "career_guidance|course_lookup|skill_lookup|category_browse|chit_chat",
+  "intent": "career_guidance|course_lookup|skill_lookup|category_browse|chit_chat|follow_up",
   "user_goal": "short",
   "target_role": "short or empty",
   "role_type": "technical|non_technical|mixed",
