@@ -158,70 +158,8 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
                 "core_areas": []
             }
 
-        # Step 7: Final Renderer -> Skill Extraction Mode
-        guidance_data = generate_final_response(
-            user_question=message,
-            guidance_plan=guidance_plan,
-            grounded_courses=grounded_courses,
-            language=router_out.user_language,
-            coverage_note=coverage_note,
-            chat_history=chat_history
-        )
-        
-        # New Feature: Project Ideas
-        # Now integrated into the main guidance_data response
-        project_data = {"projects": guidance_data.get("projects", [])}
-
-        response_text = guidance_data.get("text", "")
-        # Normalize Skills: Unique, Cap 4-6
-        extracted_skills = list(dict.fromkeys(guidance_data.get("skills", [])))[:6]
-        if len(extracted_skills) < 4 and intent == "CAREER_GUIDANCE":
-            # Just keeping what we have if LLM returned fewer, but capping at max 6.
-            pass
-
-        # 1) LLM-based Tiered Display (Cards vs Text Only)
-        primary_ids = guidance_data.get("primary_course_ids", [])
-        secondary_ids = guidance_data.get("secondary_course_ids", [])
-        
-        card_courses = []
-        text_only_courses = []
-        
-        # Map IDs back to objects
-        course_map = {str(c.get("course_id")): c for c in grounded_courses}
-        
-        # Role Type for Blacklist
-        role_type = router_out.role_type or "non_technical"
-        target_role_lower = (router_out.target_role or "").lower()
-        if any(x in target_role_lower for x in ["data", "scientist", "engineer", "developer", "backend", "analyst", "analysis", "programming", "software"]):
-            role_type = "technical"
-        elif any(x in target_role_lower for x in ["designer", "ui", "ux", "creative"]):
-            role_type = "design"
-        elif any(x in target_role_lower for x in ["manager", "lead", "soft skills", "communication"]):
-            role_type = "soft_skills"
-
-        # Categorize with Blacklist (REMOVED Hard Skill Gate to allow semantic matches from LLM)
-        all_candidate_ids = primary_ids + secondary_ids
-        for cid in all_candidate_ids:
-            if cid in course_map:
-                course = course_map[cid]
-                # Guard: Blacklist (Hard Stop for role mismatch)
-                if is_blacklisted(role_type, course.get("category")):
-                    continue
-                
-                # We trust the LLM's semantic choice if it's not blacklisted
-                if cid in primary_ids:
-                    card_courses.append(course)
-                else:
-                    text_only_courses.append(course)
-
-        # 2) Trust the LLM's text response (it now includes skills & project ideas text)
-        all_display_courses = card_courses + text_only_courses
-
-        # 3) Final Cards
-        grounded_courses = card_courses
-
         # --- UNIVERSAL FALLBACK MECHANISM (Stage 3: Context-Aware Retrieval) ---
-        # If after tiered logic, we still have NO CARDS, we try a desperate contextual search.
+        # If after initial search, we still have NO CARDS, we try a desperate contextual search.
         if not grounded_courses and intent in ["CAREER_GUIDANCE", "SKILL_SEARCH", "SEARCH"]:
             logger.info(f"Session {session_uuid} | All primary matching failed. Triggering Context-Aware Fallback.")
             
@@ -254,6 +192,65 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
                     logger.info(f"Session {session_uuid} | Fallback found {len(grounded_courses)} contextual courses.")
                 else:
                     coverage_note = "Our catalog currently lacks exact matches. Feel free to explore other career topics!"
+
+        # Step 7: Final Renderer -> Skill Extraction Mode
+        # Called AFTER all possible search attempts (Initial + Fallback)
+        guidance_data = generate_final_response(
+            user_question=message,
+            guidance_plan=guidance_plan,
+            grounded_courses=grounded_courses, # Now includes fallback results
+            language=router_out.user_language,
+            coverage_note=coverage_note,
+            chat_history=chat_history
+        )
+        
+        # New Feature: Project Ideas (integrated in guidance_data)
+        project_data = {"projects": guidance_data.get("projects", [])}
+        response_text = guidance_data.get("text", "")
+        
+        # Normalize Skills: Unique, Cap 4-6
+        extracted_skills = list(dict.fromkeys(guidance_data.get("skills", [])))[:6]
+        if len(extracted_skills) < 4 and intent == "CAREER_GUIDANCE":
+            # Just keeping what we have if LLM returned fewer, but capping at max 6.
+            pass
+
+        # Tiered Display Logic (Cards vs Text Only)
+        primary_ids = guidance_data.get("primary_course_ids", [])
+        secondary_ids = guidance_data.get("secondary_course_ids", [])
+        
+        card_courses = []
+        text_only_courses = []
+        
+        # Map IDs back to objects
+        course_map = {str(c.get("course_id")): c for c in grounded_courses}
+        
+        # Role Type for Blacklist
+        role_type = router_out.role_type or "non_technical"
+        target_role_lower = (router_out.target_role or "").lower()
+        if any(x in target_role_lower for x in ["data", "scientist", "engineer", "developer", "backend", "analyst", "analysis", "programming", "software"]):
+            role_type = "technical"
+        elif any(x in target_role_lower for x in ["designer", "ui", "ux", "creative"]):
+            role_type = "design"
+        elif any(x in target_role_lower for x in ["manager", "lead", "soft skills", "communication"]):
+            role_type = "soft_skills"
+
+        # Filter by Blacklist
+        all_candidate_ids = primary_ids + secondary_ids
+        for cid in all_candidate_ids:
+            if cid in course_map:
+                course = course_map[cid]
+                # Guard: Blacklist (Hard Stop for role mismatch)
+                if is_blacklisted(role_type, course.get("category")):
+                    continue
+                
+                # We trust the LLM's semantic choice if it's not blacklisted
+                if cid in primary_ids:
+                    card_courses.append(course)
+                else:
+                    text_only_courses.append(course)
+
+        all_display_courses = card_courses + text_only_courses
+        grounded_courses = card_courses # Return cards as the primary list
 
         # Logging & History (Simplified)
         latency_ms = int((time.time() - start_time) * 1000)
