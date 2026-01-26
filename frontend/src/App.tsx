@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import ChatInterface from './components/ChatInterface'
 
 function App() {
@@ -19,7 +18,7 @@ function App() {
 
             <footer className="app-footer">
                 <div className="container">
-                    <p>Powered by Groq LLM • RAG-First Architecture</p>
+                    <p>© {new Date().getFullYear()} Career Copilot</p>
                 </div>
             </footer>
         </div>

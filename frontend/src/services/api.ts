@@ -13,6 +13,13 @@ interface CourseDetail {
     description?: string;
 }
 
+interface ProjectDetail {
+    title: string;
+    level: string;
+    description: string;
+    skills: string[];
+}
+
 interface ErrorDetail {
     code: string;
     message: string;
@@ -23,6 +30,7 @@ interface ChatResponse {
     intent: string;
     answer: string;
     courses: CourseDetail[];
+    projects: ProjectDetail[];
     error: ErrorDetail | null;
     request_id: string;
 }

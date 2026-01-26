@@ -8,6 +8,7 @@ interface Message {
     role: 'user' | 'assistant';
     content: string;
     courses?: any[];
+    projects?: any[];
     intent?: string;
 }
 
@@ -109,6 +110,7 @@ export default function ChatInterface() {
                 role: 'assistant',
                 content: response.answer,
                 courses: response.courses,
+                projects: response.projects,
                 intent: response.intent,
             }
 
@@ -215,14 +217,14 @@ export default function ChatInterface() {
                         <h2>مرحباً! 👋</h2>
                         <p>أنا مساعدك الذكي للتوجيه المهني واختيار الكورسات</p>
                         <div className="suggestions">
-                            <button onClick={() => setInput('عاوز أتعلم Python')}>
-                                عاوز أتعلم Python
+                            <button onClick={() => setInput('عايز أبدأ مسار تعلم مهارات الـ Data Analysis')}>
+                                عايز أبدأ مسار تعلم مهارات الـ Data Analysis
                             </button>
-                            <button onClick={() => setInput('من بيشرح JavaScript?')}>
-                                من بيشرح JavaScript?
+                            <button onClick={() => setInput('إيه هي الكورسات المناسبة عشان أبقى مبرمج محترف؟')}>
+                                إيه هي الكورسات المناسبة عشان أبقى مبرمج محترف؟
                             </button>
-                            <button onClick={() => setInput('عايز أبقى Data Scientist')}>
-                                عايز أبقى Data Scientist
+                            <button onClick={() => setInput('محتاج أحسن مهارات التواصل والـ Soft Skills')}>
+                                محتاج أحسن مهارات التواصل والـ Soft Skills
                             </button>
                         </div>
                     </div>
@@ -235,6 +237,26 @@ export default function ChatInterface() {
                             <div className="courses-grid">
                                 {msg.courses.map((course) => (
                                     <CourseCard key={course.course_id} course={course} />
+                                ))}
+                            </div>
+                        )}
+                        {msg.projects && msg.projects.length > 0 && (
+                            <div className="projects-grid">
+                                {msg.projects.map((project, idx) => (
+                                    <div key={idx} className="project-card">
+                                        <div className="project-header">
+                                            <span className="project-title">🚀 {project.title}</span>
+                                            <span className={`level-badge level-${project.level.toLowerCase()}`}>
+                                                {project.level}
+                                            </span>
+                                        </div>
+                                        <p className="project-description">{project.description}</p>
+                                        <div className="project-skills">
+                                            {project.skills.map((skill: string, sIdx: number) => (
+                                                <span key={sIdx} className="project-skill-tag">{skill}</span>
+                                            ))}
+                                        </div>
+                                    </div>
                                 ))}
                             </div>
                         )}

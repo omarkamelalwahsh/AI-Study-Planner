@@ -27,7 +27,7 @@ router = APIRouter()
 
 # Domain Blacklist to prevent cross-domain hallucinations (10/10 Plan)
 DOMAIN_BLACKLIST = {
-    "technical": ["Graphic Design", "Digital Media", "Health & Wellness", "Banking Skills", "Customer Service", "Human Resources"],
+    "technical": ["Graphic Design", "Digital Media", "Health & Wellness", "Banking Skills", "Customer Service", "Human Resources", "Leadership", "Sales", "Management", "General"],
     "design": ["Programming", "Hacking", "Data Security", "Networking", "Banking Skills", "Technology Applications"],
     "soft_skills": ["Programming", "Hacking", "Data Security", "Networking", "Web Development", "Mobile Development"]
 }
@@ -78,10 +78,18 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
         intent = router_out.intent
         logger.info(f"Session {session_uuid} | Intent: {intent}")
 
-        # Pipeline Variables
-        guidance_plan = {"guidance_intro": "", "core_areas": []}
-        grounded_courses = []
         coverage_note = None
+        
+        # Step 1.5: Query Optimization for Data Analysis
+        optimized_keywords = []
+        if any(x in message.lower() for x in ["data", "تحليل", "بيانات"]):
+            optimized_keywords = ["Excel", "SQL", "Python", "Data Analysis"]
+
+        # Fetch Chat History for Context
+        history_stmt = select(ChatMessage).where(ChatMessage.session_id == session_uuid).order_by(ChatMessage.created_at.desc()).limit(5)
+        history_res = await db.execute(history_stmt)
+        chat_history_objs = history_res.scalars().all()[::-1] # Order chronologically for LLM
+        chat_history = [{"role": m.role, "content": m.content} for m in chat_history_objs]
         
 # -----------------------
 # Chat API
@@ -100,8 +108,14 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
                     {
                         "canonical_en": s.get("canonical_en"),
                         "primary_queries": [s.get("canonical_en")] + s.get("primary_queries", []) + s.get("fallback_queries", []),
-                        "limit_per_query": 5
+                        "limit_per_query": 10
                     } for s in skills_data.get("skills_or_areas", [])
+                ] + [
+                    {
+                        "canonical_en": kw,
+                        "primary_queries": [kw],
+                        "limit_per_query": 10
+                    } for kw in optimized_keywords
                 ]
             }
             
@@ -118,40 +132,29 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
 
         # --- PATH B: STANDARD SEARCH / OTHER ---
         else:
-            # Traditional Retrieval (Layer 2 legacy style but using new Renderer)
-            # We map "Standard Search" to "Guidance Plan" format so Renderer works.
+            is_yes = any(x in message.lower() for x in ["ايوه", "أيوة", "نعم", "طبعا", "yes", "sure", "ok"])
+            is_no = any(x in message.lower() for x in ["لأ", "لا", "شكرا", "no", "thanks"])
             
-            q = message
-            if router_out.keywords:
-                q = " ".join(router_out.keywords)
-                
-            # Execute standard retrieval
-            offset = 0 # Simple pagination for now (always 0 for freshness in this refactor)
-            filters = {}
-            if router_out.target_categories:
-                filters["category"] = router_out.target_categories[0] # Simplification
-                
-            # Execute standard retrieval
-            # IMPROVEMENT: Use keywords and message context for better recall
-            search_queries = [message]
-            if router_out.keywords:
-                search_queries = router_out.keywords + search_queries
-                
-            dedup_map = {}
-            for q in search_queries[:4]: # Limit queries
-                raw_courses = await retrieve_courses(db, q, top_k=10, filters=None)
-                for c in raw_courses:
-                    cid = str(c.course_id)
-                    if cid not in dedup_map:
-                        cd = c.dict()
-                        cd["supported_skills"] = ["Search Match"]
-                        dedup_map[cid] = cd
-                        
-            grounded_courses = list(dedup_map.values())
+            # Execute search ONLY if not a simple yes/no
+            if not (is_yes or is_no):
+                search_queries = [message]
+                if router_out.keywords:
+                    search_queries = router_out.keywords + search_queries
+                    
+                dedup_map = {}
+                for sq in search_queries[:6]:
+                    raw_courses = await retrieve_courses(db, sq, top_k=20, filters=None)
+                    for c in raw_courses:
+                        cid = str(c.course_id)
+                        if cid not in dedup_map:
+                            cd = c.dict()
+                            cd["supported_skills"] = ["Search Match"]
+                            dedup_map[cid] = cd
+                grounded_courses = list(dedup_map.values())
             
             # Create a dummy guidance plan for the Renderer
             guidance_plan = {
-                "guidance_intro": f"Here are the best results for your search: '{message}'",
+                "guidance_intro": f"Results for: {message}",
                 "core_areas": []
             }
 
@@ -161,14 +164,13 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
             guidance_plan=guidance_plan,
             grounded_courses=grounded_courses,
             language=router_out.user_language,
-            coverage_note=coverage_note
+            coverage_note=coverage_note,
+            chat_history=chat_history
         )
         
         # New Feature: Project Ideas
-        # We only generate projects if we found courses/intent is valid
-        project_data = {"projects": []}
-        if intent in ["CAREER_GUIDANCE", "SEARCH", "FOLLOW_UP", "SKILL_SEARCH"]:
-             project_data = generate_project_ideas(message, router_out.user_language)
+        # Now integrated into the main guidance_data response
+        project_data = {"projects": guidance_data.get("projects", [])}
 
         response_text = guidance_data.get("text", "")
         # Normalize Skills: Unique, Cap 4-6
@@ -190,36 +192,30 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
         # Role Type for Blacklist
         role_type = router_out.role_type or "non_technical"
         target_role_lower = (router_out.target_role or "").lower()
-        if any(x in target_role_lower for x in ["data", "scientist", "engineer", "developer", "backend"]):
+        if any(x in target_role_lower for x in ["data", "scientist", "engineer", "developer", "backend", "analyst", "analysis", "programming", "software"]):
             role_type = "technical"
         elif any(x in target_role_lower for x in ["designer", "ui", "ux", "creative"]):
             role_type = "design"
         elif any(x in target_role_lower for x in ["manager", "lead", "soft skills", "communication"]):
             role_type = "soft_skills"
 
-        # Categorize with Hard Gate + Blacklist
+        # Categorize with Blacklist (REMOVED Hard Skill Gate to allow semantic matches from LLM)
         all_candidate_ids = primary_ids + secondary_ids
         for cid in all_candidate_ids:
             if cid in course_map:
                 course = course_map[cid]
-                # Guard 1: Blacklist (Hard Stop)
+                # Guard: Blacklist (Hard Stop for role mismatch)
                 if is_blacklisted(role_type, course.get("category")):
                     continue
-                # Guard 2: Hard Skill Gate (No Skill = No Course)
-                if hard_skill_gate(course, extracted_skills):
-                    if cid in primary_ids:
-                        card_courses.append(course)
-                    else:
-                        text_only_courses.append(course)
-                # If it fails the gate, it's not shown AT ALL (10/10 Rule)
+                
+                # We trust the LLM's semantic choice if it's not blacklisted
+                if cid in primary_ids:
+                    card_courses.append(course)
+                else:
+                    text_only_courses.append(course)
 
-        # 2) Enrich response text
-        if extracted_skills:
-            response_text += "\n\n**Skills extracted:**\n" + ", ".join(extracted_skills)
-
-        if text_only_courses:
-            response_text += "\n\n**Additional relevant topics found in our catalog:**\n"
-            response_text += "\n".join([f"- {c.get('title')}" for c in text_only_courses])
+        # 2) Trust the LLM's text response (it now includes skills & project ideas text)
+        all_display_courses = card_courses + text_only_courses
 
         # 3) Final Cards
         grounded_courses = card_courses
@@ -238,8 +234,8 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
             
             # 2. Retrieve broad results from ANY relevant context
             fallback_dedup = {}
-            for fq in fallback_candidates[:3]:
-                fallback_results = await retrieve_courses(db, query=fq, top_k=10, filters=None)
+            for fq in fallback_candidates[:5]:
+                fallback_results = await retrieve_courses(db, query=fq, top_k=20, filters=None)
                 for c in fallback_results:
                     cid = str(c.course_id)
                     if cid not in fallback_dedup:
@@ -270,6 +266,7 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
             if not session:
                 session = ChatSession(id=session_uuid, session_memory={})
                 db.add(session)
+                await db.flush() # Ensure ID is written before messages
             
             # Add messages
             db.add(ChatMessage(
@@ -285,9 +282,9 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
         except Exception as e:
             logger.error(f"Failed to save chat history: {e}")
 
-        # Convert grounded_courses back to schema for API response
+        # Convert all_display_courses to schema for API response
         api_courses = []
-        for c in grounded_courses:
+        for c in all_display_courses: # Changed from grounded_courses to all_display_courses
             # c is a dict now
             api_courses.append(CourseDetail(
                 course_id=str(c.get("course_id")),
@@ -305,10 +302,18 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
         from app.models import ProjectDetail
         api_projects = []
         for p in project_data.get("projects", []):
+            if not isinstance(p, dict):
+                continue
+            
+            # Defensive check for required fields to prevent Pydantic crash
+            title = p.get("title") or p.get("description", "Untitled Project")[:30]
+            level = p.get("level") or "Intermediate"
+            description = p.get("description") or "Applying professional skills."
+            
             api_projects.append(ProjectDetail(
-                title=p.get("title"),
-                level=p.get("level"),
-                description=p.get("description"),
+                title=title,
+                level=level,
+                description=description,
                 skills=p.get("skills", [])
             ))
 
@@ -316,7 +321,7 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
             session_id=str(session_uuid),
             intent=intent,
             answer=response_text,
-            courses=api_courses,
+            courses=api_courses, # Now uses api_courses derived from all_display_courses
             projects=api_projects,
             request_id=str(uuid.uuid4())
         )
