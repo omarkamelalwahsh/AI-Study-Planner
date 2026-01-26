@@ -11,6 +11,7 @@ import hashlib
 import time
 import uuid
 import logging
+import re
 from app.router import classify_intent, GroqUnavailableError
 from app.retrieval import retrieve_courses, generate_search_plan, execute_and_group_search
 from app.generator import (
@@ -25,11 +26,11 @@ from app.utils.normalization import normalize_text, wants_courses, detect_langua
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# Domain Blacklist to prevent cross-domain hallucinations (10/10 Plan)
+# Domain Blacklist to prevent cross-domain hallucinations (Ultra-Strict)
 DOMAIN_BLACKLIST = {
-    "technical": ["Graphic Design", "Digital Media", "Health & Wellness", "Banking Skills", "Customer Service", "Human Resources", "Leadership", "Sales", "Management", "General"],
-    "design": ["Programming", "Hacking", "Data Security", "Networking", "Banking Skills", "Technology Applications"],
-    "soft_skills": ["Programming", "Hacking", "Data Security", "Networking", "Web Development", "Mobile Development"]
+    "technical": ["Graphic Design", "Digital Media", "Health & Wellness", "Banking Skills", "Customer Service", "Human Resources", "Leadership", "Sales", "Management", "General", "Project Management", "Personal Productivity", "General Office"],
+    "design": ["Programming", "Hacking", "Data Security", "Networking", "Banking Skills", "Technology Applications", "Project Management", "Human Resources", "Sales", "Management"],
+    "soft_skills": ["Programming", "Hacking", "Data Security", "Networking", "Web Development", "Mobile Development", "Data Analysis"]
 }
 
 def is_blacklisted(role_type: str, category: str) -> bool:
@@ -42,12 +43,45 @@ def is_blacklisted(role_type: str, category: str) -> bool:
     return False
 
 def hard_skill_gate(course: Dict, skills: List[str]) -> bool:
-    """A course MUST mention at least one skill keyword to pass."""
-    text = (str(course.get("title", "")) + " " + str(course.get("category", ""))).lower()
+    """
+    ULTRA-STRICT Rule: A course MUST have a strong semantic match with at least one extracted skill.
+    Normalization is key to preventing leaks.
+    """
+    if not skills:
+        return False
+        
+    title = str(course.get("title", "")).lower()
+    category = str(course.get("category", "")).lower()
+    description = str(course.get("description", "")).lower()
+    course_skills = [s.lower() for s in (course.get("skills") or [])]
+    
+    # Combined target text for broad matching
+    combined_text = f"{title} {category} {description}"
+    
+    # Clean up symbols for precision
+    def clean(t): return re.sub(r"[^a-z0-9\s\+\#\.]", " ", t.lower())
+    
+    normalized_text = clean(combined_text)
+    
     for s in skills:
-        keywords = [kw for kw in s.lower().split() if len(kw) >= 2] # Allow AI, ML, SQL
-        if any(kw in text for kw in keywords):
+        s_clean = clean(s).strip()
+        if not s_clean: continue
+        
+        # 1. Exact match in course.skills (Highest Precision)
+        if any(s_clean == cs for cs in course_skills):
             return True
+            
+        # 2. Substring match for short technical terms (SQL, PHP, C++, C#, JS)
+        # Avoid matching 'is' or 'at' by enforcing word boundaries for short terms
+        if len(s_clean) <= 3:
+            pattern = rf"\b{re.escape(s_clean)}\b"
+            if re.search(pattern, normalized_text):
+                return True
+        else:
+            # For longer terms, simple inclusion is usually safe
+            if s_clean in normalized_text:
+                return True
+                
     return False
 
 @router.post("/chat", response_model=ChatResponse, responses={503: {"model": ErrorResponse}})
@@ -193,15 +227,19 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
                 else:
                     coverage_note = "Our catalog currently lacks exact matches. Feel free to explore other career topics!"
 
+        # Rule 3 Calculation: Did we find more courses in the DB than what we will display?
+        # A simple heuristic: if initial grounded_courses > 6, they won't all be primary.
+        has_more_in_catalog = (len(grounded_courses) > 6) if grounded_courses else False
+        
         # Step 7: Final Renderer -> Skill Extraction Mode
-        # Called AFTER all possible search attempts (Initial + Fallback)
         guidance_data = generate_final_response(
             user_question=message,
             guidance_plan=guidance_plan,
-            grounded_courses=grounded_courses, # Now includes fallback results
+            grounded_courses=grounded_courses, 
             language=router_out.user_language,
             coverage_note=coverage_note,
-            chat_history=chat_history
+            chat_history=chat_history,
+            has_more_in_catalog=has_more_in_catalog # Rule 3
         )
         
         # New Feature: Project Ideas (integrated in guidance_data)
@@ -224,28 +262,44 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
         # Map IDs back to objects
         course_map = {str(c.get("course_id")): c for c in grounded_courses}
         
-        # Role Type for Blacklist
-        role_type = router_out.role_type or "non_technical"
+        # Improved Role Type Detection
         target_role_lower = (router_out.target_role or "").lower()
-        if any(x in target_role_lower for x in ["data", "scientist", "engineer", "developer", "backend", "analyst", "analysis", "programming", "software"]):
+        role_type = router_out.role_type or "non_technical"
+        if any(x in target_role_lower for x in ["data", "scientist", "engineer", "developer", "backend", "analyst", "analysis", "programming", "software", "security", "cyber", "network"]):
             role_type = "technical"
-        elif any(x in target_role_lower for x in ["designer", "ui", "ux", "creative"]):
+        elif any(x in target_role_lower for x in ["designer", "ui", "ux", "creative", "art", "media", "3d", "modeling"]):
             role_type = "design"
-        elif any(x in target_role_lower for x in ["manager", "lead", "soft skills", "communication"]):
+        elif any(x in target_role_lower for x in ["manager", "lead", "soft skills", "communication", "leadership", "productivity"]):
             role_type = "soft_skills"
 
-        # Filter by Blacklist
+        # Normalize extracted_skills (Lower + Clean) for the Code Filter
+        clean_extracted_skills = [re.sub(r"[^a-z0-9\+\#\.]", " ", s.lower()).strip() for s in extracted_skills]
+
+        # Filter by Blacklist + Rule: Code Decides (Semantic Precision)
         all_candidate_ids = primary_ids + secondary_ids
         for cid in all_candidate_ids:
             if cid in course_map:
                 course = course_map[cid]
-                # Guard: Blacklist (Hard Stop for role mismatch)
-                if is_blacklisted(role_type, course.get("category")):
+                cat = course.get("category")
+                
+                # 1. Blacklist (Hard Stop)
+                if is_blacklisted(role_type, cat):
                     continue
                 
-                # We trust the LLM's semantic choice if it's not blacklisted
+                # 2. Rule: Code Decides (Mandatory for PRIMARY CARDS)
                 if cid in primary_ids:
-                    card_courses.append(course)
+                    # Apply Hard Gate: Course MUST match at least one skill keyword
+                    if hard_skill_gate(course, clean_extracted_skills):
+                        # 3. Soft Guard: Block "Soft Domains" crossover for "Hard Role"
+                        # If role is Technical/Design but category is Soft Skills/Leadership, block unless skill match is verified.
+                        if role_type in ["technical", "design"] and cat in ["Soft Skills", "Leadership & Management", "Project Management", "Personal Development"]:
+                            # We already matched a skill in hard_skill_gate, but for crossovers, we prioritize the role
+                            pass 
+                        
+                        card_courses.append(course)
+                    else:
+                        # Fail: Drop to text or ignore (Here we just drop)
+                        text_only_courses.append(course)
                 else:
                     text_only_courses.append(course)
 

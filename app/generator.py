@@ -75,24 +75,29 @@ If the question is unrelated (e.g. cooking, medicine, religion, entertainment):
 
 🧠 CORE INTELLIGENCE FLOW (MANDATORY)
 1. Understand Intent: Identify if it's a role, skill, or learning goal.
-2. Extract Skills (STRICT): English only, concrete skills.
+2. Extract Skills (STRICT):
+   - Extract ONLY concrete technical/professional skills in English.
+   - AVOID generalities like "Excel", "Soft Skills", or "Problem Solving" unless specifically requested.
+   - AVOID motivational or vague terms.
 3. Course Matching (RAG HARD RULE):
    - ONLY recommend courses that exist in the provided catalog.
-   - MATCH by title, skills, or description.
-   - If a skill has no matching courses -> ignore it silently.
-   - If no courses match at all, say: "لا توجد كورسات مناسبة حاليا في الكتالوج لهذا الموضوع."
+   - MATCH MUST BE DIRECT: Only include courses with direct semantic overlap (Title/Skills).
+   - ABSOLUTELY NO INDIRECT RELEVANCE: Never say "this is indirectly related" or "could be useful".
+   - If no direct courses match -> Skip the course section.
    - SPECIAL CASE: If the user asks about "Programming Basics" (how to start programming), state: "قريبا هنضيف كورسات لأساسيات البرمجة" after providing the definition and skills.
+   - RULE 3 (Are there more?): If the user asks "هل في كورسات كمان؟" (or "show more"):
+     - If `has_more_in_catalog` is True -> Suggest there are more.
+     - If `has_more_in_catalog` is False -> Say: "دي كل الكورسات المتاحة حاليًا في الكتالوج".
 
-4. Cross-Domain Logic (SMART): Include courses from supporting categories (e.g., Leadership for Communication).
+4. Cross-Domain Logic (STRICT): ONLY include supporting categories if the skill match is 100% technical.
 
-🧱 RESPONSE STRUCTURE (STRICT)
-1. Short Definition (2-3 lines): Professional, no fluff.
+🧱 RESPONSE STRUCTURE (STRICT - MUST APPLY TO ROLES OR SPECIFIC COURSE NAMES)
+1. Short Definition (2-3 lines): Professional, no fluff. If user asks about a specific COURSE, define the domain.
 2. Skills Extracted: Bullet list, English only.
-3. Recommended Courses: For EACH: Title, Level, and 1-line reason (e.g., "Supports [Skill]").
+3. Recommended Courses: For EACH: Title, Level, and 1-line DIRECT reason.
 4. Project Ideas (IMPORTANT): Provide exactly 3 (Beginner, Intermediate, Advanced) AFTER courses.
-   - CRITICAL: Suggest projects ONLY if the topic is IN-SCOPE (Career/Skills).
-   - If in-scope but no matching catalog courses found, label them as "Practice Projects" (غير مرتبطة بالكتالوج حاليا).
-   - If OUT-OF-SCOPE, skip this section and the "projects" JSON field completely.
+   - Focus on practical applications.
+   - If OUT-OF-SCOPE, skip projects completely.
 
 🚫 ABSOLUTE FORBIDDEN
 - No hallucinated courses.
@@ -283,11 +288,12 @@ def generate_guidance_plan(
 
 def generate_final_response(
     user_question: str,
-    guidance_plan: Dict,
-    grounded_courses: List[Dict],
+    guidance_plan: Dict[str, Any],
+    grounded_courses: List[Dict[str, Any]],
     language: str,
-    coverage_note: str = None,
-    chat_history: List[Dict] = None
+    coverage_note: Optional[str] = None,
+    chat_history: List[Dict[str, str]] = [],
+    has_more_in_catalog: bool = False
 ) -> Dict[str, Any]:
     """
     Layer 6: Generate final response - NOW Skill Extraction Mode.
@@ -308,7 +314,8 @@ def generate_final_response(
     input_data = {
         "user_question": user_question,
         "language": language,
-        "candidate_courses": candidate_courses
+        "candidate_courses": candidate_courses,
+        "has_more_in_catalog": has_more_in_catalog
     }
     
     try:

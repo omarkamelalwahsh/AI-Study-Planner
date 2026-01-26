@@ -89,6 +89,8 @@ def _default_category_from_anchors(user_question: str) -> str:
         return "Technology Applications"
     if any(x in ql for x in ["sales", "مبيعات", "تسويق", "marketing"]):
         return "Sales"
+    if any(x in ql for x in ["3d", "blender", "maya", "modeling", "نحت", "ثلاثي الأبعاد"]):
+        return "Graphic Design"
     if any(x in ql for x in ["communication", "تواصل", "soft skills", "مهارات شخصية", "negotiation"]):
         return "Soft Skills"
     if any(x in ql for x in ["business", "entrepreneur", "startup", "management", "bussines", "businessman", "ريداة أعمال", "بيزنس", "إدارة"]):
