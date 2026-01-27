@@ -42,6 +42,7 @@ CREATE INDEX IF NOT EXISTS idx_course_embeddings_course_id ON course_embeddings 
 -- Chat sessions table
 CREATE TABLE IF NOT EXISTS chat_sessions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    session_memory JSONB DEFAULT '{}',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -50,6 +51,8 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     id SERIAL PRIMARY KEY,
     session_id UUID REFERENCES chat_sessions(id) ON DELETE CASCADE,
     request_id UUID DEFAULT uuid_generate_v4(),
+    role VARCHAR(20) NOT NULL,
+    content TEXT NOT NULL,
     user_message_hash VARCHAR(64),
     -- SHA256 hash for privacy
     intent VARCHAR(50),
