@@ -1,0 +1,13 @@
+# Career Copilot RAG Backend Requirements
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-dotenv==1.0.0
+pandas==2.1.4
+groq==0.4.2
+google-generativeai==0.3.2
+pydantic==2.5.3
+httpx==0.26.0
+faiss-cpu==1.7.4
+sentence-transformers==2.2.2
+numpy>=1.24.0
+
