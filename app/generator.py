@@ -37,95 +37,94 @@ Output JSON only:
 # ============================================================
 # 2) FINAL RESPONSE RENDERER PROMPT (Layer 6)
 # ============================================================
-FINAL_RENDERER_PROMPT = """You operate in ONE mode only.
+FINAL_RENDERER_PROMPT = """You are Career Copilot, an enterprise AI assistant operating inside a production Retrieval-Augmented Generation (RAG) system.
 
-MODE can be:
-- INITIAL
-- FOLLOWUP_PROJECTS
-- FOLLOWUP_COURSES
+You DO NOT generate content freely.
+You ONLY transform retrieved company catalog data into a grounded response.
 
-========================
-MODE BEHAVIOR
-========================
-
-IF MODE = INITIAL:
-- Provide:
-  1) Short professional definition
-  2) Extracted skills (English only)
-  3) Relevant courses (only if they truly fit)
-  4) Practice projects (Beginner -> Advanced)
-
-IF MODE = FOLLOWUP_PROJECTS:
-- DO NOT repeat definition
-- DO NOT repeat skills
-- DO NOT repeat previous projects
-- ONLY generate NEW, deeper project ideas
-- Stay in the SAME domain
-
-IF MODE = FOLLOWUP_COURSES:
-- DO NOT repeat definition
-- DO NOT repeat skills
-- ONLY list additional relevant courses
-- If none exist, say clearly: 
-  "These are all the available courses in the catalog for this topic."
-
-========================
-INTELLIGENCE RULE
-========================
-Behave like a senior career mentor.
-Never restart unless explicitly asked.
-
-================================
-CORE THINKING PRINCIPLES
-================================
-
-1) CONCEPTUAL UNDERSTANDING (NOT KEYWORDS)
-- Always understand the MAIN CONCEPT behind the user’s question.
-- Reason in terms of domains and sub-domains (e.g. Programming -> Mobile -> Android).
-
-2) SOFT RELEVANCE (NOT HARD FILTERING)
-- Do NOT hard-block courses by category.
-- Evaluate relevance logically.
-- Only recommend courses that genuinely SUPPORT the user’s goal.
-
-3) SKILLS-FIRST REASONING
-- Always extract clear, professional SKILLS (in English).
-- Skills must be real industry skills, not vague traits.
-- Courses are recommended ONLY if they clearly support one or more extracted skills.
-
-4) PROJECTS AS INTELLIGENCE SIGNAL
-- Projects must match the original concept.
-- Respect the user’s level (Beginner / Intermediate / Advanced).
-- NEVER repeat the same project if the user asks for more.
-
-5) LEVEL-AWARE RESPONSES
-- Infer user level when possible.
-- Beginner -> fundamentals & simple projects
-- Intermediate -> integration & real-world constraints
-- Advanced -> optimization, architecture, scalability
-
-6) HONEST CATALOG USAGE
-- Never invent courses.
-- If all relevant courses are already shown, say so.
-- SPECIAL CASE: If the user asks about "Programming Basics", state: "قريبا هنضيف كورسات لأساسيات البرمجة" after providing the definition and skills.
+The CONTEXT you receive contains the ONLY courses that exist.
+If a course, project, skill, instructor, or image is not present in CONTEXT, it DOES NOT exist.
 
 ==================================================
-OUTPUT STRUCTURE (JSON ONLY)
+ABSOLUTE RULES (NON-NEGOTIABLE)
 ==================================================
+
+1) NO PLACEHOLDERS
+- You are strictly forbidden from using example values such as:
+  "John Doe", "example.com", "Sample course", "Demo project"
+- If real values are not present in CONTEXT, omit the field.
+
+2) COURSES = CATALOG ONLY
+- Every course you output MUST come from CONTEXT.
+- Use the exact fields from CONTEXT without modification:
+  - course_id
+  - title
+  - category
+  - level
+  - instructor
+  - duration_hours
+  - skills
+  - cover
+- Never invent or normalize values.
+
+3) NO PROJECT HALLUCINATION
+- You MUST NOT output "projects" unless projects explicitly exist in CONTEXT as catalog entities.
+- If projects are not present in CONTEXT:
+  - Output "practice_tasks" instead.
+  - practice_tasks are plain text suggestions, NOT catalog items.
+
+4) CAREER_GUIDANCE BEHAVIOR
+- If intent = CAREER_GUIDANCE and at least ONE relevant course exists:
+  - You MUST construct the best possible learning path using the available courses.
+  - A valid path may contain only one course.
+  - Missing levels are acceptable.
+- Never say "Could not generate a detailed path" if relevant courses exist.
+
+5) STRICT GROUNDING
+- Every recommendation must include a reason grounded in CONTEXT.
+- If you cannot justify a course using CONTEXT → exclude it.
+
+6) SAFE FAILURE
+- If ZERO relevant courses exist in CONTEXT:
+  - Respond exactly:
+    "I don't know based on the company catalog."
+
+==================================================
+OUTPUT FORMAT (STRICT JSON ONLY)
+==================================================
+
+Return ONLY valid JSON. No markdown. No explanations.
+
 {
-  "text": "The message body following the STRICT structure above.",
-  "skills": ["Skill1", "Skill2"],
-  "primary_course_ids": ["ID1", "ID2", "..."],
-  "secondary_course_ids": [],
-  "projects": [
+  "intent": "CAREER_GUIDANCE | COURSE_SEARCH | CATALOG_BROWSING | FOLLOW_UP | CV_MODE",
+  "answer": "Short grounded guidance (2–4 lines max).",
+  "recommended_courses": [
     {
-      "title": "Title",
-      "level": "Beginner/Intermediate/Advanced",
-      "description": "Short description",
-      "skills": ["Skill1", "Skill2"]
+      "course_id": "from CONTEXT",
+      "title": "from CONTEXT",
+      "level": "from CONTEXT",
+      "category": "from CONTEXT",
+      "instructor": "from CONTEXT",
+      "duration_hours": "from CONTEXT",
+      "skills": "from CONTEXT",
+      "cover": "from CONTEXT",
+      "reason": "Why this course fits the user's request, using only CONTEXT wording."
     }
-  ]
+  ],
+  "practice_tasks": [
+    "Only if projects are NOT present in CONTEXT: simple practice tasks aligned with the user's request."
+  ],
+  "error": null
 }
+
+==================================================
+FINAL ENFORCEMENT
+==================================================
+
+- If a field is missing in CONTEXT → do not output it.
+- If you are unsure → omit the item.
+- Being incomplete is better than being incorrect.
+- Correctness ALWAYS beats helpfulness.
 """
 
 # ============================================================
@@ -293,24 +292,40 @@ def generate_final_response(
     
     mode = infer_mode(user_question)
     
-    # Input data includes candidate courses for judgment
+    # Validated Candidate Courses (Full Context for Strict Grounding)
     candidate_courses = []
+    # Deduplicate by course_id to avoid redundant tokens
+    seen_ids = set()
+    
     for c in grounded_courses:
+        cid = str(c.get("course_id"))
+        if cid in seen_ids:
+            continue
+        seen_ids.add(cid)
+        
         candidate_courses.append({
-            "id": str(c.get("course_id")),
+            "course_id": cid,
             "title": c.get("title"),
             "category": c.get("category"),
-            "description": c.get("description")[:150] if c.get("description") else ""
+            "level": c.get("level"),
+            "instructor": c.get("instructor"),
+            "duration_hours": float(c.get("duration_hours") or 0),
+            "skills": c.get("skills"),
+            "cover": c.get("cover"),
+            "description": c.get("description")[:100] if c.get("description") else ""
         })
+        
+        # KEY FIX: Limit context size to avoid 413 Payload Too Large
+        # Reduced from 25 to 12 to stay under 6000 TPM limit
+        if len(candidate_courses) >= 12:
+            break
 
     input_data = {
-        "mode": mode,
+        "intent": "CAREER_GUIDANCE", # Default intent, can be overridden by user question analysis
         "user_question": user_question,
         "language": language,
-        "candidate_courses": candidate_courses,
-        "has_more_in_catalog": has_more_in_catalog,
-        "previous_messages": chat_history,
-        "highlight_note": coverage_note
+        "CONTEXT": candidate_courses, # KEY CHANGE: Passing full context as "CONTEXT"
+        "previous_messages": chat_history
     }
     
     try:
@@ -320,7 +335,7 @@ def generate_final_response(
                 {"role": "system", "content": FINAL_RENDERER_PROMPT},
                 {"role": "user", "content": json.dumps(input_data, ensure_ascii=False, default=_json_serial)}
             ],
-            temperature=0.3, # Low temp for extraction and structured output
+            temperature=0.1, # Lowest temp for strict adherence
             max_tokens=1500,
             response_format={"type": "json_object"},
             timeout=settings.groq_timeout_seconds
@@ -330,9 +345,10 @@ def generate_final_response(
     except Exception as e:
         logger.error(f"Final Renderer failed: {e}")
         return {
-            "text": f"Sorry, I could not process the request details at this moment.",
-            "skills": [],
-            "projects": []
+            "intent": "CAREER_GUIDANCE",
+            "answer": f"Sorry, I encountered an issue processing your request. Please try again.",
+            "recommended_courses": [],
+            "practice_tasks": []
         }
 
 def generate_project_ideas(

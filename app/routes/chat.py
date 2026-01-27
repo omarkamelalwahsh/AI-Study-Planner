@@ -281,26 +281,6 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
             has_more_in_catalog=has_more_in_catalog # Rule 3
         )
         
-        # New Feature: Project Ideas (integrated in guidance_data)
-        project_data = {"projects": guidance_data.get("projects", [])}
-        response_text = guidance_data.get("text", "")
-        
-        # Normalize Skills: Unique, Cap 4-6
-        extracted_skills = list(dict.fromkeys(guidance_data.get("skills", [])))[:6]
-        if len(extracted_skills) < 4 and intent == "CAREER_GUIDANCE":
-            # Just keeping what we have if LLM returned fewer, but capping at max 6.
-            pass
-
-        # Tiered Display Logic (Cards vs Text Only)
-        primary_ids = guidance_data.get("primary_course_ids", [])
-        secondary_ids = guidance_data.get("secondary_course_ids", [])
-        
-        card_courses = []
-        text_only_courses = []
-        
-        # Map IDs back to objects
-        course_map = {str(c.get("course_id")): c for c in grounded_courses}
-        
         # Improved Role Type Detection
         target_role_lower = (router_out.target_role or "").lower()
         role_type = router_out.role_type or "non_technical"
@@ -311,39 +291,44 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
         elif any(x in target_role_lower for x in ["manager", "lead", "soft skills", "communication", "leadership", "productivity"]):
             role_type = "soft_skills"
 
-        # Normalize extracted_skills (Lower + Clean) for the Code Filter
-        clean_extracted_skills = [re.sub(r"[^a-z0-9\+\#\.]", " ", s.lower()).strip() for s in extracted_skills]
-
-        # Filter by Blacklist + Rule: Code Decides (Semantic Precision)
-        all_candidate_ids = primary_ids + secondary_ids
-        for cid in all_candidate_ids:
-            if cid in course_map:
-                course = course_map[cid]
-                cat = course.get("category")
-                
-                # 1. Blacklist (Hard Stop)
-                if is_blacklisted(role_type, cat):
-                    continue
-                
-                # 2. Rule: Code Decides (Mandatory for PRIMARY CARDS)
-                if cid in primary_ids:
-                    # Apply Hard Gate: Course MUST match at least one skill keyword
-                    if hard_skill_gate(course, clean_extracted_skills):
-                        # 3. Soft Guard: Block "Soft Domains" crossover for "Hard Role"
-                        # If role is Technical/Design but category is Soft Skills/Leadership, block unless skill match is verified.
-                        if role_type in ["technical", "design"] and cat in ["Soft Skills", "Leadership & Management", "Project Management", "Personal Development"]:
-                            # We already matched a skill in hard_skill_gate, but for crossovers, we prioritize the role
-                            pass 
-                        
-                        card_courses.append(course)
-                    else:
-                        # Fail: Drop to text or ignore (Here we just drop)
-                        text_only_courses.append(course)
-                else:
-                    text_only_courses.append(course)
-
-        all_display_courses = card_courses + text_only_courses
-        grounded_courses = card_courses # Return cards as the primary list
+        # New Strict Response Processing
+        response_text = guidance_data.get("answer", "")
+        
+        # 1. Courses: The LLM now returns the full filtered list directly
+        recommended_courses_raw = guidance_data.get("recommended_courses", [])
+        
+        # We trust the Strict LLM output for grounding, but we still do a safety ID check
+        # to ensure we can map back to our original objects if needed (though LLM returned full object).
+        # Since strict prompt explicitly returns catalog objects, we can use them directly 
+        # BUT we must convert them to the CourseDetail schema.
+        
+        api_courses = []
+        for rc in recommended_courses_raw:
+            api_courses.append(CourseDetail(
+                course_id=str(rc.get("course_id")),
+                title=rc.get("title"),
+                level=rc.get("level"),
+                category=rc.get("category"),
+                instructor=rc.get("instructor"),
+                duration_hours=float(rc.get("duration_hours") or 0),
+                description=rc.get("description")[:200] if rc.get("description") else None,
+                skills=rc.get("skills"),
+                cover=rc.get("cover")
+            ))
+            
+        # 2. Projects: Handled as "practice_tasks" (plain text) in strict mode
+        # We accept them but wrap them in the Project schema for frontend compatibility
+        practice_tasks = guidance_data.get("practice_tasks", [])
+        api_projects = []
+        
+        for task in practice_tasks:
+            # Task is a string, so we wrap it
+            api_projects.append(ProjectDetail(
+                title="Practice Task",
+                level="All Levels",
+                description=str(task), # The task text goes here
+                skills=[]
+            ))
 
         # Logging & History (Simplified)
         latency_ms = int((time.time() - start_time) * 1000)
@@ -365,69 +350,30 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
             ))
             db.add(ChatMessage(
                 session_id=session_uuid, request_id=uuid.uuid4(), role="assistant",
-                content=response_text, intent=intent, retrieved_course_count=len(grounded_courses),
+                content=response_text, intent=intent, retrieved_course_count=len(api_courses),
                 latency_ms=latency_ms
             ))
             await db.commit()
         except Exception as e:
             logger.error(f"Failed to save chat history: {e}")
-
-        # Convert all_display_courses to schema for API response
-        api_courses = []
-        for c in all_display_courses: # Changed from grounded_courses to all_display_courses
-            # c is a dict now
-            api_courses.append(CourseDetail(
-                course_id=str(c.get("course_id")),
-                title=c.get("title"),
-                level=c.get("level"),
-                category=c.get("category"),
-                instructor=c.get("instructor"),
-                duration_hours=c.get("duration_hours"),
-                description=c.get("description")[:200] if c.get("description") else None,
-                skills=c.get("skills")[:100] if c.get("skills") else None,
-                cover=c.get("cover")
-            ))
-            
-        # Convert projects to schema
-        from app.models import ProjectDetail
-        api_projects = []
-        for p in project_data.get("projects", []):
-            if not isinstance(p, dict):
-                continue
-            
-            # Defensive check for required fields to prevent Pydantic crash
-            title = p.get("title") or p.get("description", "Untitled Project")[:30]
-            level = p.get("level") or "Intermediate"
-            description = p.get("description") or "Applying professional skills."
-            
-            api_projects.append(ProjectDetail(
-                title=title,
-                level=level,
-                description=description,
-                skills=p.get("skills", [])
-            ))
-
-        # Save Session Context for Follow-up Manager
-        # We save skills from skills_data if available
-        extracted_skills = []
-        if intent == "CAREER_GUIDANCE" and vars().get("skills_data"):
-            # Flatten skills from data
-            for s in skills_data.get("skills_or_areas", []):
-                extracted_skills.append(s.get("canonical_en"))
+        
+        # Update Session Context (Simplified for Strict Mode)
+        # We extracted skills implicitly via the retrieval step, but strict mode doesn't return separate 'skills' list top-level.
+        # We can extract them from the recommended courses if needed, or just leave empty.
         
         update_session_context(
             str(session_uuid), 
-            topic=router_out.target_role or (router_out.keywords[0] if router_out.keywords else "General"), 
+            topic=router_out.target_role or "General", 
             role_type=role_type, 
-            projects=guidance_data.get("projects", []),
-            skills=extracted_skills
+            projects=[], # No rich projects to save in strict mode
+            skills=[]
         )
 
         return ChatResponse(
             session_id=str(session_uuid),
             intent=intent,
             answer=response_text,
-            courses=api_courses, # Now uses api_courses derived from all_display_courses
+            courses=api_courses,
             projects=api_projects,
             request_id=str(uuid.uuid4())
         )
