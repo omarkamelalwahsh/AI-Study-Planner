@@ -42,6 +42,8 @@ class CourseDetail(BaseModel):
     description_short: Optional[str] = None
     description_full: Optional[str] = None
     reason: Optional[str] = None
+    fit: Optional[str] = None
+    why_recommended: Optional[str] = None
     cover: Optional[str] = None
 
 
