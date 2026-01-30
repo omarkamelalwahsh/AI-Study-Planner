@@ -184,7 +184,8 @@ class RelevanceGuard:
                 allowed_domains.update({'programming', 'data security'})
             
             # If course category is not in allowed domains, it's a cross-domain noise
-            if category and category not in allowed_domains:
+            # V6 Fix: Allow partial matches (e.g. "Sales Strategy" matches "Sales")
+            if category and not any(d in category or category in d for d in allowed_domains):
                 # If it's a soft skill and not requested, we already filter below, 
                 # but this also catches other unrelated domains (e.g., Banking, Public Speaking)
                 return False

@@ -10,49 +10,43 @@ from models import IntentType, IntentResult
 
 logger = logging.getLogger(__name__)
 
-INTENT_SYSTEM_PROMPT = """SYSTEM — Intent Router (Career Copilot)
+INTENT_SYSTEM_PROMPT = """SYSTEM: You are Career Copilot Orchestrator. You must respond safely and correctly to ANY user query in Arabic/English/mixed.
 
-You are a strict intent classifier for a production RAG chatbot.
-Your ONLY job: return a JSON object with:
+PRIMARY GOALS:
+- Understand the user's intent and choose the correct response mode.
+- Never hallucinate courses or data.
+- Never crash: if uncertain, degrade gracefully with a safe fallback and one clarifying question.
+- Output must be machine-readable JSON that the backend/UI can render.
+
+HARD RULES (NON-NEGOTIABLE):
+1) NEVER invent course titles. Course lists are only taken from the backend catalog retrieval results.
+2) NEVER produce a learning plan (phases/weeks/projects) unless the user explicitly asks for a plan/roadmap/path/timeline/steps.
+3) If the user asks a definition question ("what is X", "ايه هو X", "يعني ايه X"), answer directly as GENERAL_QA with a short explanation and optionally offer courses after.
+4) If you cannot confidently classify intent (confidence < 0.6), use SAFE_FALLBACK: provide a short helpful response + ask exactly one clarifying question.
+5) Output ONLY valid JSON. No markdown. No extra text.
+
+SUPPORTED INTENTS:
+- CV_ANALYSIS: user uploaded CV / asks to analyze CV or evaluate project ("قيم المشروع", "project assessment").
+- COURSE_SEARCH: user asks for courses on a topic or keyword ("عاوز كورس بايثون", "Python courses").
+- LEARNING_PATH: user explicitly asks for a plan/roadmap/path/timeline ("خطة", "مسار", "بدايه", "roadmap").
+- CAREER_GUIDANCE: user asks for role guidance, skills, how to become X (without explicitly asking for a plan).
+- GENERAL_QA: conceptual definition/explanation not requesting courses ("what is Excel?", "ايه هو SQL؟", "يعني ايه...").
+- CATALOG_BROWSING: user asks what courses exist ("ايه الكورسات عندك", "browse catalog").
+- FOLLOW_UP: user refers to previous answer ("more", "show more", "explain that").
+- PROJECT_IDEAS: user asks specifically for project/practice ideas.
+
+Output JSON:
 {
   "intent": "...",
   "confidence": 0.0-1.0,
   "needs_clarification": true/false,
   "clarifying_question": "..." | null,
-  "slots": { ... }
-}
-
-Do NOT answer the user. Do NOT list courses. Do NOT explain anything.
-Do NOT include any keys beyond the schema above.
-
-AVAILABLE INTENTS (choose exactly one):
-- CATALOG_BROWSING: user asks what courses exist, categories, "إيه الكورسات المتاحة؟", "ايه المجالات؟", "what courses do you have?"
-- COURSE_SEARCH: user asks for courses about a topic/skill ("عاوز كورس بايثون", "learn excel", "كورسات data analysis")
-- COURSE_DETAILS: user asks details about a specific course already mentioned ("تفاصيل", "عرض المزيد", "ايه هو الكورس ده؟")
-- CAREER_GUIDANCE: user asks how to become a role/path ("ازاي ابقى مدير مبيعات", "how to become content creator")
-- PROJECT_IDEAS: user asks for project ideas ("افكار مشاريع", "project ideas")
-- LEARNING_PATH: user asks for a time-based plan ("خطة 3 اسابيع ساعتين يوميا", "study plan")
-- CV_ANALYSIS: user uploads CV file/image or asks to analyze CV/level
-- ATS_CHECK: user asks specifically about ATS compatibility/scoring AND provided file/image
-- GENERAL_QA: conceptual definition/explanation not requesting courses ("ايه هي بايثون؟", "يعني ايه data analysis؟")
-- FOLLOW_UP: short follow-up that depends on session context ("كمان", "غيرها", "ايه هي؟")
-
-RULES:
-1) If message is "إيه هي الكورسات المتاحة؟" or similar → intent MUST be CATALOG_BROWSING (confidence >= 0.95).
-2) If message contains "خطة" + timeframe (weeks/hours/day) → LEARNING_PATH.
-3) If message asks "افكار مشاريع" → PROJECT_IDEAS.
-4) If message is a job/role question starting with "ازاي ابقى" / "how to become" → CAREER_GUIDANCE.
-5) If message is "ايه هي X" / "what is X" without asking for courses → GENERAL_QA.
-6) If message is ambiguous AND could be COURSE_SEARCH vs CAREER_GUIDANCE, prefer asking ONE clarifying question via fields.
-7) FOLLOW_UP only if the message is short AND clearly refers to previous output.
-
-Slots:
-- "topic": extracted topic (e.g., python, excel, data analysis)
-- "role": extracted role (e.g., sales manager)
-- "hours_per_day", "weeks", "level" when available
-- "language": "ar" or "en" based on user message
-
-Return JSON only."""
+  "slots": {
+    "topic": "...",
+    "role": "...",
+    "language": "ar|en|mixed"
+  }
+}"""
 
 
 class IntentRouter:
@@ -182,23 +176,40 @@ class IntentRouter:
                      slots={"offer_courses": True}
                  )
 
-        # 3. Learning Path / Career Guidance (Explicit Keywords)
-        # 3. Learning Path / Career Guidance (Explicit Keywords)
-        # Fix 1: Hard rules for "Strategy/Roadmap" requests
-        roadmap_keywords = ["مسار تعلم", "ابدأ اتعلم", "roadmap", "أتعلم data", "أبدا في data", "learning path", "خطة تعلم", "بداية"]
-        soft_skills_keywords = ["communication", "leadership", "time management", "soft skills", "مهارات ناعمة", "تواصل", "قيادة", "problem solving"]
-        
-        if any(kw in msg_lower for kw in roadmap_keywords) or any(kw in msg_lower for kw in soft_skills_keywords):
-             # Prefer LEARNING_PATH for directed roadmaps OR soft skills training
-             intent_type = IntentType.LEARNING_PATH
-             
-             # If strictly soft skills, ensure we set a flag if needed, but Learning Path intent suffices
-             # as the Response Builder handles Soft Skills -> Practice Tasks mapping
-             
+        # 3. CV_ANALYSIS Hard Override
+        cv_keywords = ["cv", "resume", "سيرة ذاتية", "السيرة الذاتية", "profile", "evaluate", "review", "analysis", "قيم", "راجع", "تحليل", "project assessment", "grade my project", "قيم المشروع"]
+        if any(x in msg_lower for x in cv_keywords):
+             # Ensure it's not "evaluate course" or "market analysis" (Context check?)
+             # But "evaluate" usually implies feedback.
+             # Differentiate "data analysis" query from "do analysis on me"
+             if "data analysis" in msg_lower and "course" in msg_lower:
+                 pass # Fallthrough to search
+             elif "market" in msg_lower:
+                 pass # Fallthrough to QA
+             else:
+                 # If explicit action words found
+                 action_words = ["check", "rate", "review", "analyze", "evaluate", "قيم", "راجع", "حلل", "شوف"]
+                 if any(w in msg_lower for w in action_words):
+                      return IntentResult(intent=IntentType.CV_ANALYSIS, needs_explanation=True)
+
+        # 4. Learning Path (Strict - ONLY if plan/roadmap/steps requested)
+        roadmap_keywords = ["خطة", "مسار", "بدايه", "roadmap", "step by step", "timeline", "ابدأ اتعلم", "بداية", "أبدا في"]
+        if any(kw in msg_lower for kw in roadmap_keywords):
              return IntentResult(
-                intent=intent_type,
+                intent=IntentType.LEARNING_PATH,
                 confidence=1.0,
-                role="" # Placeholder for _extract_potential_role
+                needs_courses=True,
+                needs_explanation=True
+            )
+
+        # Soft Skills / General Guidance -> CAREER_GUIDANCE
+        soft_skills_keywords = ["communication", "leadership", "time management", "soft skills", "مهارات ناعمة", "تواصل", "قيادة", "problem solving"]
+        if any(kw in msg_lower for kw in soft_skills_keywords):
+             return IntentResult(
+                intent=IntentType.CAREER_GUIDANCE,
+                confidence=1.0,
+                needs_courses=True,
+                needs_explanation=True
             )
 
         # 4. Career Guidance (General)

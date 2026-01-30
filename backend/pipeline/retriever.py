@@ -36,6 +36,8 @@ class CourseRetriever:
         skill_result: SkillValidationResult,
         level_filter: Optional[str] = None,
         category_filter: Optional[str] = None,
+        focus_area: Optional[str] = None, # V6 Compound Query
+        tool: Optional[str] = None        # V6 Compound Query
     ) -> List[CourseDetail]:
         """
         Retrieve courses for validated skills.
@@ -44,6 +46,8 @@ class CourseRetriever:
             skill_result: Validated skills from skill extractor
             level_filter: Optional filter by course level
             category_filter: Optional filter by category
+            focus_area: Primary topic (e.g. Database)
+            tool: The method/tool (e.g. Python)
             
         Returns:
             List of CourseDetail ordered by relevance
@@ -51,36 +55,62 @@ class CourseRetriever:
         skills = skill_result.validated_skills
         unmatched = skill_result.unmatched_terms
         
-        if not skills and not unmatched:
-            logger.info("No skills or unmatched terms to search for")
-            return []
-        
         # Collect courses and count skill matches
         course_scores: Dict[str, int] = defaultdict(int)
         course_data: Dict[str, dict] = {}
         
+        # Helper: Add course to data
+        def add_course(course, score_boost):
+            if not course: return
+            course_id = course.get('course_id')
+            if course_id:
+                course_scores[course_id] += score_boost
+                course_data[course_id] = course
+
+        # Tier 0: Compound Query Intersection (Highest Priority)
+        # If we have both Focus and Tool, prioritize courses matching BOTH
+        if focus_area and tool:
+            logger.info(f"Retriever: Searching intersection of Focus='{focus_area}' and Tool='{tool}'")
+            # 1. Search Focus in Title/Category
+            focus_matches = self.data.search_courses_by_title(focus_area)
+            # 2. Search Tool in Title/Category or Skills
+            tool_matches = self.data.search_courses_by_title(tool)
+            tool_skill_courses = self.data.get_courses_for_skill(tool)
+            
+            tool_ids = {c.get('course_id') for c in tool_matches + tool_skill_courses if c.get('course_id')}
+            
+            # Intersection: Focus Course that mentions Tool OR Tool Course that mentions Focus?
+            # User wants: "Python for Database" -> Usually a Database course using Python.
+            # So priority: Focus matches that HAVE Tool skill or keyword.
+            
+            for course in focus_matches:
+                c_id = course.get('course_id')
+                if c_id in tool_ids:
+                    # Gold mine: Matches both
+                    add_course(course, 10) # Huge boost
+                else:
+                     # Silver: Matches Focus, but maybe tool is implicit or missing
+                     add_course(course, 3)
+
         # Tier 2: Skill matching (from index)
         for skill in skills:
             courses = self.data.get_courses_for_skill(skill)
             for course in courses:
-                course_id = course.get('course_id')
-                if course_id:
-                    course_scores[course_id] += 1
-                    course_data[course_id] = course
+                score = 1
+                # Boost if skill is the Tool
+                if tool and skill.lower() == tool.lower():
+                     score = 3
+                add_course(course, score)
         
-        # Tier 1: Direct title-based matching for keywords (especially if skills found are sparse)
-        # We look at validated skills AND unmatched terms that look like keywords
+        # Tier 1: Direct title-based matching for keywords
         search_terms = set(skills) | set(skill_result.unmatched_terms)
+        if focus_area: search_terms.add(focus_area)
+        
         for term in search_terms:
-            if len(term) < 3: continue # Skip short terms
-            
+            if len(term) < 3: continue 
             title_matches = self.data.search_courses_by_title(term)
             for course in title_matches:
-                course_id = course.get('course_id')
-                if course_id:
-                    # Tier 1 match gets a boost + more weight than skill match
-                    course_scores[course_id] += 2 
-                    course_data[course_id] = course
+                 add_course(course, 2)
         
         if not course_data:
             logger.info(f"No courses found for skills: {skills}")
@@ -100,7 +130,7 @@ class CourseRetriever:
                 if category_filter.lower() not in course_category:
                     continue
             
-            # Get full course details if available
+            # Get full course details
             full_course = self.data.get_course_by_id(course_id) or course
             
             results.append(CourseDetail(

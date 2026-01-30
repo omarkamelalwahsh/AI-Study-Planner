@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { sendMessage, uploadCV } from '../services/api'
+import { useStore } from '../store/store'
 import CourseCard from './CourseCard'
 import MessageBubble from './MessageBubble'
 import SkillGroupCard from './SkillGroupCard'
@@ -26,9 +27,8 @@ interface ChatSession {
 
 
 export default function ChatInterface() {
-    const [messages, setMessages] = useState<Message[]>([])
+    const { messages, isLoading, addMessage, setLoading, clearMessages } = useStore()
     const [input, setInput] = useState('')
-    const [loading, setLoading] = useState(false)
     const [sessionId, setSessionId] = useState<string | undefined>()
     const [error, setError] = useState<string | null>(null)
     const [isTyping, setIsTyping] = useState(false)
@@ -63,10 +63,10 @@ export default function ChatInterface() {
 
     // Auto-focus input after send
     useEffect(() => {
-        if (!loading && inputRef.current) {
+        if (!isLoading && inputRef.current) {
             inputRef.current.focus()
         }
-    }, [loading])
+    }, [isLoading])
 
     // Typing animation effect
     const animateTyping = useCallback((fullText: string, onComplete: () => void) => {
@@ -92,15 +92,14 @@ export default function ChatInterface() {
 
     const handleSubmit = async (e?: React.FormEvent) => {
         if (e) e.preventDefault()
-        if (!input.trim() || loading) return
+        if (!input.trim() || isLoading) return
 
-        const userMessage: Message = {
-            id: Date.now().toString(),
+        const userMessage: Omit<Message, 'id' | 'timestamp'> = {
             role: 'user',
             content: input.trim(),
         }
 
-        setMessages((prev) => [...prev, userMessage])
+        addMessage(userMessage as any)
         setInput('')
         setLoading(true)
         setError(null)
@@ -113,8 +112,7 @@ export default function ChatInterface() {
                 setSessionId(response.session_id)
             }
 
-            const assistantMessage: Message = {
-                id: response.request_id,
+            const assistantMessage: any = {
                 role: 'assistant',
                 content: response.answer,
                 courses: response.courses,
@@ -127,16 +125,20 @@ export default function ChatInterface() {
 
             // Animate the response
             animateTyping(response.answer, () => {
-                setMessages((prev) => [...prev, assistantMessage])
+                const fullAssistantMsg = { ...assistantMessage, id: response.request_id }
+                // We add to store manually or let store handle ID? Store handles ID.
+                addMessage(assistantMessage)
 
-                // Save to sessions
+                // Save to sessions (Note: We need the actual messages with IDs from store... 
+                // but store updates async/sync. For simplicity, we reconstruct)
+                // Actually, let's just trigger save based on store state in a useEffect or use simple reconstruction
                 const newSession: ChatSession = {
                     id: response.session_id,
-                    messages: [...messages, userMessage, assistantMessage],
+                    messages: [...messages, { ...userMessage, id: Date.now().toString() } as Message, fullAssistantMsg],
                     createdAt: new Date()
                 }
                 const updatedSessions = sessions.filter(s => s.id !== response.session_id)
-                saveSessions([newSession, ...updatedSessions].slice(0, 10)) // Keep last 10 sessions
+                saveSessions([newSession, ...updatedSessions].slice(0, 10))
             })
         } catch (err: any) {
             setError(err.message || 'خطأ في الاتصال')
@@ -162,12 +164,11 @@ export default function ChatInterface() {
         setError(null)
 
         // Add optimistic user message for file upload
-        const userMessage: Message = {
-            id: Date.now().toString(),
+        const userMsg = {
             role: 'user',
             content: `📄 Uploading CV: ${file.name}...`
         }
-        setMessages((prev) => [...prev, userMessage])
+        addMessage(userMsg as any)
 
         try {
             const response = await uploadCV(file, sessionId)
@@ -176,8 +177,7 @@ export default function ChatInterface() {
                 setSessionId(response.session_id)
             }
 
-            const assistantMessage: Message = {
-                id: response.request_id,
+            const assistantMessage: any = {
                 role: 'assistant',
                 content: response.answer,
                 courses: response.courses,
@@ -188,11 +188,12 @@ export default function ChatInterface() {
                 intent: response.intent,
             }
 
-            setMessages((prev) => [...prev, assistantMessage])
+            addMessage(assistantMessage)
+
             // Save to sessions
             const newSession: ChatSession = {
                 id: response.session_id,
-                messages: [...messages, userMessage, assistantMessage],
+                messages: [...messages, { ...userMsg, id: Date.now().toString() } as Message, { ...assistantMessage, id: response.request_id }],
                 createdAt: new Date()
             }
             const updatedSessions = sessions.filter(s => s.id !== response.session_id)
@@ -200,8 +201,6 @@ export default function ChatInterface() {
 
         } catch (err: any) {
             setError(err.message || 'فشل رفع الملف')
-            // Remove optimistic message on failure? Or just show error.
-            setMessages(prev => prev.filter(m => m.id !== userMessage.id))
         } finally {
             setLoading(false)
             if (fileInputRef.current) fileInputRef.current.value = ''
@@ -214,7 +213,7 @@ export default function ChatInterface() {
 
     // New chat function
     const handleNewChat = () => {
-        setMessages([])
+        clearMessages()
         setSessionId(undefined)
         setError(null)
         setShowSessions(false)
@@ -223,7 +222,12 @@ export default function ChatInterface() {
 
     // Load a previous session
     const handleLoadSession = (session: ChatSession) => {
-        setMessages(session.messages)
+        clearMessages()
+        // Bulk add - tricky with current store action "addMessage". 
+        // We'll iterate or add a "setMessages" action to store.
+        // ideally add 'setMessages' to store. For now, iterate:
+        session.messages.forEach(m => addMessage(m as any))
+
         setSessionId(session.id)
         setShowSessions(false)
     }
@@ -299,7 +303,7 @@ export default function ChatInterface() {
                     </div>
                 )}
 
-                {messages.map((msg) => (
+                {messages.map((msg: any) => (
                     <div key={msg.id}>
                         <MessageBubble message={msg} />
 
@@ -311,7 +315,7 @@ export default function ChatInterface() {
                             <div className="skill-groups-container">
                                 <h3>📊 المهارات المطلوبة:</h3>
                                 <div className="skill-groups-grid">
-                                    {msg.skill_groups.map((group, idx) => (
+                                    {msg.skill_groups.map((group: any, idx: number) => (
                                         <SkillGroupCard
                                             key={idx}
                                             group={group}
@@ -322,11 +326,11 @@ export default function ChatInterface() {
                             </div>
                         )}
 
-                        {msg.courses && msg.courses.length > 0 && (
+                        {msg.courses && msg.courses.length > 0 && (!msg.skill_groups || msg.skill_groups.length === 0) && (
                             <div className="courses-section">
                                 <h3>📚 كورسات مقترحة:</h3>
                                 <div className="courses-grid">
-                                    {msg.courses.map((course) => (
+                                    {msg.courses.map((course: any) => (
                                         <CourseCard key={course.course_id} course={course} />
                                     ))}
                                 </div>
@@ -380,7 +384,7 @@ export default function ChatInterface() {
                         )}
                         {msg.projects && msg.projects.length > 0 && (
                             <div className="projects-grid">
-                                {msg.projects.map((project, idx) => (
+                                {msg.projects.map((project: any, idx: number) => (
                                     <div key={idx} className="project-card">
                                         <div className="project-header">
                                             <span className="project-title">🚀 {project.title}</span>
@@ -411,7 +415,7 @@ export default function ChatInterface() {
                     </div>
                 )}
 
-                {loading && !isTyping && (
+                {isLoading && !isTyping && (
                     <div className="loading-indicator">
                         <div className="spinner"></div>
                         <span>جاري التفكير...</span>
@@ -434,7 +438,7 @@ export default function ChatInterface() {
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={handleKeyDown}
                     placeholder="اكتب سؤالك هنا... (Enter للإرسال، Shift+Enter لسطر جديد)"
-                    disabled={loading}
+                    disabled={isLoading}
                     maxLength={500}
                     rows={1}
                 />
@@ -449,14 +453,14 @@ export default function ChatInterface() {
                     type="button"
                     className="upload-btn"
                     onClick={triggerFileUpload}
-                    disabled={loading}
+                    disabled={isLoading}
                     title="رفع CV (PDF/DOCX)"
                     style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '0 10px' }}
                 >
                     📎
                 </button>
-                <button type="submit" disabled={loading || !input.trim()}>
-                    {loading ? (
+                <button type="submit" disabled={isLoading || !input.trim()}>
+                    {isLoading ? (
                         <span className="spinner" style={{ width: '20px', height: '20px', borderTopColor: 'white' }}></span>
                     ) : (
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">

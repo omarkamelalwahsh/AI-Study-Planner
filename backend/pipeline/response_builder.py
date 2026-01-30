@@ -4,15 +4,28 @@ Dynamic response generation based on intent type.
 """
 import logging
 from typing import List, Optional, Dict
+import copy
 
 from llm.base import LLMBase
 from models import (
     IntentType, IntentResult, CourseDetail, ProjectDetail, 
     SkillValidationResult, SkillGroup, LearningPlan, WeeklySchedule, LearningPhase,
-    CVDashboard
+    CVDashboard, SkillItem
 )
 
 logger = logging.getLogger(__name__)
+
+def user_asked_for_plan(msg: str) -> bool:
+    m = msg.lower()
+    triggers = ["plan", "roadmap", "timeline", "step by step", "learning path", "path",
+                "خطة", "مسار", "جدول", "جدول زمني", "خطوات", "ابدأ خطة", "اعملّي خطة"]
+    return any(t in m for t in triggers)
+
+def user_asked_for_projects(msg: str) -> bool:
+    m = msg.lower()
+    triggers = ["project", "projects", "portfolio", "practice", "tasks",
+                "مشاريع", "بورتفوليو", "تطبيق", "تمارين", "تاسكات"]
+    return any(t in m for t in triggers)
 
 
 CV_ANALYSIS_SYSTEM_PROMPT = """SYSTEM: You are Career Copilot's CV Analysis Engine.
@@ -76,53 +89,192 @@ STRICT OUTPUT JSON SCHEMA:
   "recommendations": ["..."]
 }"""
 
-RESPONSE_SYSTEM_PROMPT = """SYSTEM: You are Career Copilot's Career Guidance Planner.
-You create a role-aligned plan and required skills, and you request catalog course mapping.
-You MUST remain strictly relevant to the selected track and role.
+RESPONSE_SYSTEM_PROMPT = """SYSTEM: You are "Career Copilot" — a career guidance + internal-catalog course recommender.
+Your #1 priority is CORRECTNESS and TRACEABILITY over verbosity.
 
-CRITICAL:
-- Output ONLY valid JSON.
-- Do NOT invent course titles. You only output "skill_groups" (which imply needs). The backend maps them.
-- Do NOT include unrelated domains (e.g., Agile, Project Management, Supply Chain) unless the user explicitly asked.
+You must handle ANY user question (Arabic/English/mixed, typos included) without hallucinating, without crashing,
+and without producing irrelevant recommendations.
 
-INPUTS:
-- user_query
-- skills_catalog (available categories)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+A) NON-NEGOTIABLE CONSTRAINTS (HARD RULES)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-UNIVERSAL OUTPUT POLICY:
-- Always return:
-  1) skill_groups (core + supporting)
-  2) learning_plan (phases)
-  3) courses (selection from retrieval)
-  4) projects (role-appropriate)
+1) Catalog-Only (NO HALLUCINATION):
+- You MUST recommend ONLY from retrieved_catalog_courses provided by the backend.
+- You MUST NOT invent course titles, IDs, instructors, categories, levels, or descriptions.
+- If retrieved_catalog_courses is empty OR none are relevant, recommended_courses MUST be [].
 
-ROLE CONSTRAINTS (Apply if Role Detected):
-- IF Role="Sales Manager":
-  Core skills: Sales process, Funnel, CRM, Negotiation, Forecasting, Coaching.
-  Deliverables: ICP, Pipeline stages, Weekly forecast template, Win/loss review, Coaching plan.
-  FORBIDDEN: Agile, Supply Chain, Deep Learning, Churn Modeling (unless asked).
-  Projects: Roleplays, CRM setup, Plan creation.
+2) Precision-First:
+- It is better to return 1–3 correct courses than many mixed courses.
+- Never include unrelated “General” courses just to increase count.
 
-- IF Role="Data Analyst":
-  Core skills: Excel, SQL, Stats, Viz.
-  Deliverables: KPI Dashboard, Analysis Report.
+3) No Automatic Plan / No Automatic Projects:
+- DO NOT generate a learning plan (phases/weeks/timeline/roadmap/deliverables) unless the user explicitly asks for it.
+- DO NOT generate projects/practice tasks unless the user explicitly asks for projects/practice/tasks/portfolio.
 
-OUTPUT FORMAT (JSON ONLY):
+Plan triggers (examples):
+Arabic: "خطة" "مسار" "روودماب" "timeline" "step by step" "اعملّي خطة" "خطة مذاكرة" "learning path"
+English: "plan" "roadmap" "timeline" "step by step" "learning path" "study plan"
+
+If the user asked for a plan but DID NOT specify the topic/role/domain (e.g., "اعملي خطة مذاكرة" alone),
+you MUST NOT generate any plan. Ask exactly ONE clarifying question: "خطة لموضوع إيه بالظبط؟" / "Plan for what exactly?"
+
+4) Explainability / Traceability:
+Every word you output MUST be justifiable by:
+- user_query and/or conversation_context and/or retrieved_catalog_courses.
+
+5) Skill Grounding (CRITICAL):
+- Every skill you output MUST have:
+  (a) a short "why" explaining why this skill is needed for the user goal, AND
+  (b) at least 1 linked course_id from retrieved_catalog_courses.
+- If you cannot link the skill to any course_id, do NOT output that skill at all.
+- Never show "❓" or unknown placeholders.
+
+6) Output Layout Rule (Two-Tier Courses):
+You must produce TWO sections:
+- "recommended_courses" (Top 1–3 most relevant courses only).
+- "all_relevant_courses" (ALL relevant courses from retrieved_catalog_courses, no limit).
+If the user says "غيرهم / more / other", you do NOT ask questions — just show more from all_relevant_courses
+(if none left, say that is all available).
+
+7) Language Mirror:
+- If user is mainly Arabic → respond Arabic.
+- If user is mainly English → respond English.
+- Mixed → respond in the dominant language.
+
+8) Safe Fallback (One Question Only):
+If request is ambiguous, too broad, or confidence < 0.60:
+- Return intent="SAFE_FALLBACK"
+- Provide a short helpful line + ask exactly ONE clarifying question.
+- No random courses.
+
+9) Follow-up Behavior:
+If user message is short like ("ياريت", "تمام", "yes", "ok") then treat it as answering the LAST pending question from context.
+Do not switch topics unexpectedly.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+B) INTENT POLICY (YOU MUST CHOOSE ONE)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Choose exactly one intent:
+
+- GENERAL_QA:
+  Definitions/explanations: "what is X", "ايه هو X", "يعني ايه X"
+  Output: short explanation only (no courses unless user asked for courses).
+
+- COURSE_SEARCH:
+  User asks explicitly for courses about a topic/skill: "كورسات عن...", "courses for..."
+  Output: skills + courses. No plan unless requested.
+
+- CAREER_GUIDANCE:
+  User asks how to become/improve as a role without asking for a plan:
+  "ازاي ابقى...", "how to become..."
+  Output: required skills + courses. No plan unless requested.
+
+- LEARNING_PATH:
+  User explicitly asks for a plan/roadmap/timeline.
+  Output: plan + courses (only if topic is clear). If topic unclear → ask one question only.
+
+- CV_ANALYSIS:
+  User uploads CV or asks for CV review/dashboard.
+
+- SAFE_FALLBACK:
+  Low confidence / unclear.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+C) RELEVANCE DEFINITION (WHAT IS “CORRECT”)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+A course is relevant ONLY if it matches at least one of:
+- core competency for the target role/topic
+- essential tool/skill used in that role/topic
+- tightly supporting skill (communication/leadership) ONLY if directly useful for the goal
+
+Forbidden drift examples (unless user asked):
+- Supply Chain, Operations, Agile, Programming, Project Mgmt, Ethics, etc.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+D) INPUTS YOU RECEIVE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+You will receive:
+- user_query: string
+- conversation_context: optional dict (may include last_role, last_topic, pending_question)
+- retrieved_catalog_courses: array of course objects (may be empty)
+  Each has: course_id, title, level, category, instructor, short_desc
+
+You can ONLY choose courses from retrieved_catalog_courses.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+E) OUTPUT: STRICT JSON ONLY (NO MARKDOWN)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Return exactly this schema:
+
 {
-  "answer": "Helpful overview...",
-  "skill_groups": [
-    { "skill_area": "Sales Strategy", "why_it_matters": "...", "skills": ["..."] }
-  ],
-  "learning_plan": {
-    "phases": [
-       { "title": "Phase 1: ...", "weeks": "...", "skills": ["..."], "deliverables": ["..."] }
+  "intent": "GENERAL_QA|COURSE_SEARCH|CAREER_GUIDANCE|LEARNING_PATH|CV_ANALYSIS|SAFE_FALLBACK",
+  "include_plan": true|false,
+  "include_projects": true|false,
+  "confidence": 0.0,
+  "language": "ar|en|mixed",
+  "role": "",
+  "required_skills": {
+    "core": [
+      { "skill": "", "why": "", "course_ids": [""] }
+    ],
+    "supporting": [
+      { "skill": "", "why": "", "course_ids": [""] }
     ]
   },
-  "courses": [],
-  "projects": [
-    { "title": "...", "difficulty": "...", "description": "...", "deliverables": ["..."], "suggested_tools": ["..."] }
-  ]
+  "recommended_courses": [
+    { "course_id": "", "title": "", "fit": "core|supporting", "why_recommended": "" }
+  ],
+  "all_relevant_courses": [
+    { "course_id": "", "title": "", "fit": "core|supporting" }
+  ],
+  "learning_plan": null,
+  "projects": [],
+  "followup_question": ""
 }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+F) MODE ENFORCEMENT RULES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+- If include_plan=false:
+  learning_plan MUST be null.
+  followup_question:
+    If user asked "ازاي ابقى..." (career guidance) ولم يطلب خطة:
+      Ask ONE short question: "تحب خطة أسبوعية ولا ترشيح كورسات فقط؟" / "Do you want a weekly plan or courses only?"
+    Otherwise keep followup_question = "".
+
+- If include_projects=false:
+  projects MUST be [].
+
+- If retrieved_catalog_courses has no relevant matches:
+  recommended_courses MUST be []
+  all_relevant_courses MUST be []
+  Ask ONE clarifying question (topic/role/scope).
+
+- Top 1–3 only in recommended_courses.
+- ALL relevant in all_relevant_courses (no limit).
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+G) FINAL SELF-CHECK (BEFORE YOU OUTPUT)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Verify:
+- JSON is valid, no extra text.
+- No invented courses.
+- No plan unless explicitly requested AND topic is clear.
+- No projects unless explicitly requested.
+- Every skill has why + course_ids, otherwise remove it.
+- recommended_courses <= 3
+- all_relevant_courses includes all relevant courses.
+- Exactly ONE intent.
+- If uncertain: SAFE_FALLBACK with exactly one question.
+
+END.
 """
 
 
@@ -133,6 +285,7 @@ class ResponseBuilder:
     
     def __init__(self, llm: LLMBase):
         self.llm = llm
+        self.last_followup_question = ""
     
     async def build(
         self,
@@ -141,30 +294,41 @@ class ResponseBuilder:
         skill_result: SkillValidationResult,
         user_message: str,
         context: Optional[dict] = None,
-    ) -> tuple[str, List[ProjectDetail], List[CourseDetail], List[SkillGroup], Optional[LearningPlan], Optional[CVDashboard]]:
+    ) -> tuple:
         """
-        Build the final response based on intent.
+        Main response orchestration. 
+        Returns (answer, projects, courses, skill_groups, learning_plan, cv_dashboard, all_relevant)
         """
         # Route strict CV Analysis
         if intent_result.intent == IntentType.CV_ANALYSIS:
              # Check if we have actual content to analyze
-             # If validated skills are empty and message is short (just the command "Evaluate"), ask for CV
              is_command_only = len(user_message.split()) < 5
              if not skill_result.validated_skills and is_command_only:
-                 answer = "أهلاً بك! لتقييم سيرتك الذاتية، يرجى رفع ملف الـ CV أولاً أو نسخ النص هنا. 📄"
-                 return answer, [], [], [], None, None
+                 answer = "أهلاً بك! لتقييم سيرتك الذاتية أو مشروعك، يرجى رفع الملف (PDF/Word) أو نسخ التفاصيل هنا. 📄"
+                 return answer, [], [], [], None, None, []
                  
-             answer, projects, final_courses, skill_groups, learning_plan, cv_dashboard = await self._build_cv_dashboard(user_message, skill_result)
+             return await self._build_cv_dashboard(user_message, skill_result)
+        
+        # V9 Fix: Explicit Handling for GENERAL_QA / Definitions
+        elif intent_result.intent == IntentType.GENERAL_QA or (intent_result.intent == IntentType.CAREER_GUIDANCE and len(user_message.split()) < 6 and "?" in user_message and not skill_result.validated_skills):
+             # Fast track for "What is Excel?" or "Explain Python"
+             prompt = f"User asked: {user_message}\nAnswer briefly (2-3 sentences) defining the concept. Then suggest asking for a learning path if interested."
+             try:
+                 resp = await self.llm.generate_json(prompt, system_prompt="You are a helpful IT Tutor. Return JSON: {'answer': '...'}", temperature=0.3)
+                 return resp.get("answer", "مفهوم مهم في المجال التقني."), [], [], [], None, None, []
+             except:
+                 return "هو مفهوم تقني يستخدم في تحليل البيانات وتطوير البرمجيات. تحب أرشحلك كورسات عنه؟", [], [], [], None, None, []
+        
         else:
-            # Apply strict display limit of 5 (V6 Pagination Patch)
-            num_courses = len(courses)
-            k_return = min(5, num_courses)
-            courses_context = courses[:k_return]
+            # --- V10 Logic: LLM Decides Tiering ---
+            # We send all filtered courses to the LLM (capped for token safety)
+            courses_context = courses[:20] 
             
-            # Initialize return variables for scope safety
+            # Initialize return variables
             answer = ""
             projects = []
             final_courses = []
+            all_relevant = []
             skill_groups = []
             learning_plan = None
             cv_dashboard = None
@@ -183,35 +347,30 @@ class ResponseBuilder:
                 for c in courses_context
             ]
             
-            skills_data = {
-                "validated": skill_result.validated_skills,
-                "unmatched": skill_result.unmatched_terms,
-                "skill_to_domain": skill_result.skill_to_domain
-            }
-            
             session_state = {}
             if context:
                 session_state = {
                     "last_intent": context.get("last_intent"),
                     "last_topic": context.get("last_topic"),
-                    "last_domain": context.get("last_domain"),
-                    "last_results_course_ids": context.get("last_results_course_ids", []),
-                    "last_plan_constraints": context.get("last_plan_constraints"),
                     "pagination_offset": context.get("pagination_offset", 0),
-                    "plan_asked": context.get("plan_asked", False), # V6: Prevent repeated plan questions
-                    "brief_explanation": context.get("brief_explanation") # V5: Get explanation from context
+                    "is_short_confirmation": context.get("is_short_confirmation", False),
+                    "last_followup": context.get("last_followup", "")
                 }
 
-            prompt = f"""User Message: "{user_message}"
+            prompt_context = ""
+            if session_state.get("is_short_confirmation"):
+                last_q = session_state.get("last_followup", "")
+                prompt_context = f"\n[CONTEXT] User is confirming/answering your last question: \"{last_q}\". Stay in that scope."
+
+            prompt = f"""User Message: "{user_message}"{prompt_context}
 Intent identified: {intent_result.intent.value}
 Target Role: {intent_result.role}
 
 RETRIEVED DATA (Only use this):
-catalog_results: {courses_data}
-skills_catalog: {skills_data}
-session_state: {session_state}
+retrieved_catalog_courses: {courses_data}
+conversation_context: {session_state}
 
-Generate the structured response in JSON format according to the rules."""
+Generate the structured response in JSON format."""
 
             try:
                 response = await self.llm.generate_json(
@@ -220,173 +379,108 @@ Generate the structured response in JSON format according to the rules."""
                     temperature=0.3
                 )
                 
-                # 1. Answer & Clarification
+                # Check Flags from LLM
+                include_plan = response.get("include_plan", False)
+                include_projects = response.get("include_projects", False)
+
+                # 1. Answer Mapping
                 answer = response.get("answer", "")
-                if response.get("clarifying_question"):
-                    answer = f"{answer}\n\n{response['clarifying_question']}"
-                    
-                # 2. Skill Groups
-                for sg in response.get("skill_groups", []):
-                    skill_groups.append(SkillGroup(
-                        skill_area=sg.get("skill_area", ""),
-                        why_it_matters=sg.get("why_it_matters", ""),
-                        skills=sg.get("skills", [])
-                    ))
+                if not answer:
+                    role_desc = response.get("role", "")
+                    if role_desc:
+                         answer = f"**المسار المهني: {role_desc}**\n\n"
+                
+                followup = response.get("followup_question", "")
+                self.last_followup_question = followup
+                
+                # 2. Skill Groups Processing (Strict Grounding)
+                skills_req = response.get("required_skills", {})
+                
+                if skills_req:
+                    for group_key, group_title, group_why in [
+                        ("core", "Core Skills", "المهارات الأساسية"),
+                        ("supporting", "Supporting Skills", "مهارات مساعدة")
+                    ]:
+                        raw_list = skills_req.get(group_key, [])
+                        if raw_list:
+                            rich_skills = []
+                            for s in raw_list:
+                                if isinstance(s, dict):
+                                    skill_name = s.get("skill", s.get("name", ""))
+                                    skill_why = s.get("why", "")
+                                    mapping_ids = s.get("course_ids", [])
+                                    
+                                    if mapping_ids:
+                                        rich_skills.append(SkillItem(
+                                            name=skill_name,
+                                            why=skill_why,
+                                            course_ids=mapping_ids,
+                                            courses_count=len(mapping_ids)
+                                        ))
+                            
+                            if rich_skills:
+                                skill_groups.append(SkillGroup(
+                                    skill_area=group_title if response.get("language") != "ar" else group_why,
+                                    why_it_matters="أهم المهارات المطلوبة لهذا الهدف",
+                                    skills=rich_skills
+                                ))
 
-                # 3. Projects (Robust Fallback logic handled by prompt instructions, but kept safe here)
-                for p in response.get("projects", []):
-                    projects.append(ProjectDetail(
-                        title=p.get("title", "Project"),
-                        difficulty=p.get("difficulty", "Beginner"),
-                        description=p.get("description", ""),
-                        deliverables=p.get("deliverables", []),
-                        suggested_tools=p.get("suggested_tools", []),
-                        # V4 Migration Fix: Populate legacy fields to prevent Frontend Crash
-                        level=p.get("difficulty", "Beginner"), 
-                        skills=p.get("suggested_tools", []) # Map tools to skills for display
-                    ))
-                if intent_result.intent == IntentType.PROJECT_IDEAS and not projects:
-                    # Minimal fallback if LLM returns nothing involved
-                    projects = self._fallback_projects(intent_result.role or "General")
-
-                # 4. Learning Plan
-                lp_data = response.get("learning_plan")
-                if lp_data:
-                    schedule = []
-                    phases = []
-                    
-                    # Legacy Schedule
-                    for week in lp_data.get("schedule", []):
-                        schedule.append(WeeklySchedule(
-                            week=week.get("week", 1),
-                            focus=week.get("focus", ""),
-                            courses=week.get("courses", []),
-                            outcomes=week.get("outcomes", [])
+                # 3. Learning Plan (Strict)
+                if include_plan:
+                    plan_data = response.get("learning_plan")
+                    if isinstance(plan_data, dict):
+                        phases = []
+                        for p in plan_data.get("phases", []):
+                            phases.append(LearningPhase(
+                                title=p.get("title", "Phase"),
+                                weeks=str(p.get("weeks", "1")),
+                                skills=p.get("skills", []),
+                                deliverables=p.get("deliverables", [])
+                            ))
+                        learning_plan = LearningPlan(phases=phases)
+                
+                # 4. Projects (Strict)
+                if include_projects:
+                    projects = []
+                    for p in response.get("projects", []):
+                        projects.append(ProjectDetail(
+                            title=p.get("title", "Project"),
+                            difficulty=p.get("difficulty", "Beginner"),
+                            description=p.get("description", ""),
+                            deliverables=p.get("deliverables", []),
+                            suggested_tools=p.get("suggested_tools", []),
                         ))
-                    
-                    # V6 Phases
-                    for ph in lp_data.get("phases", []):
-                         phases.append(LearningPhase(
-                             title=ph.get("title", ""),
-                             weeks=ph.get("weeks", ""),
-                             skills=ph.get("skills", []),
-                             deliverables=ph.get("deliverables", [])
-                         ))
 
-                    learning_plan = LearningPlan(
-                        weeks=lp_data.get("weeks"),
-                        hours_per_day=lp_data.get("hours_per_day"),
-                        schedule=schedule,
-                        phases=phases
-                    )
-                    
-                # 5. Course Processing (Selection + Truncation)
-                selected_course_ids = set()
-                llm_courses = response.get("courses", [])
+                # 5. Two-Tier Course Mapping
+                for rc in response.get("recommended_courses", []):
+                    cid = rc.get("course_id")
+                    match = next((c for c in courses if c.course_id == cid), None)
+                    if match:
+                        c_copy = copy.deepcopy(match)
+                        c_copy.fit = rc.get("fit", "core")
+                        c_copy.why_recommended = rc.get("why_recommended", "")
+                        final_courses.append(c_copy)
                 
-                # Map LLM enriched fields (reason, short desc) back to objects
-                enriched_courses_map = {}
-                for c in llm_courses:
-                    cid = c.get("course_id")
-                    if cid: 
-                        selected_course_ids.add(cid)
-                        enriched_courses_map[cid] = c
-
-                if learning_plan:
-                    for week in learning_plan.schedule:
-                        for cid in week.courses: selected_course_ids.add(cid)
-
-                # Filter & Enrich original course objects
+                for arc in response.get("all_relevant_courses", []):
+                    cid = arc.get("course_id")
+                    match = next((c for c in courses if c.course_id == cid), None)
+                    if match:
+                        c_copy = copy.deepcopy(match)
+                        c_copy.fit = arc.get("fit", "supporting")
+                        all_relevant.append(c_copy)
                 
-                # CRITICAL V5 FIX: If LLM returns an empty course list, respect it.
-                # Do NOT fallback to courses_context unless the intent EXPLICITLY requires them (like COURSE_SEARCH)
-                # and the LLM failed to specify which ones.
-                
-                if selected_course_ids:
-                    for course in (courses_context if courses_context else courses):
-                        if course.course_id in selected_course_ids:
-                            new_course = course.model_copy()
-                            enrich_data = enriched_courses_map.get(course.course_id, {})
-                            
-                            full_desc = enrich_data.get("description_full") or course.description or ""
-                            short_desc = enrich_data.get("description_short") or (full_desc[:180] + "..." if len(full_desc) > 180 else full_desc)
-                            
-                            new_course.description_full = full_desc
-                            new_course.description_short = short_desc
-                            new_course.description = short_desc
-                            new_course.reason = enrich_data.get("reason")
-                            new_course.cover = enrich_data.get("cover")
-                            final_courses.append(new_course)
-                elif intent_result.intent in [IntentType.COURSE_SEARCH, IntentType.CATALOG_BROWSING, IntentType.CAREER_GUIDANCE]:
-                    # Fallback for search and guidance intents if LLM forgot to pick specific course_ids
-                    for course in (courses_context[:5] if courses_context else courses[:5]):
-                        new_course = course.model_copy()
-                        new_course.description = (course.description[:180] + "...") if course.description and len(course.description) > 180 else course.description
-                        new_course.reason = "مرشح بناءً على تخصصك المختار."
-                        final_courses.append(new_course)
-                
-                # CRITICAL V6 Safe Guard: If COURSE_SEARCH and still no courses, force fallback
-                if intent_result.intent == IntentType.COURSE_SEARCH and not final_courses:
-                    answer, projects, final_courses, skill_groups, learning_plan = self._fallback_response(courses_context[:5] if courses_context else courses[:5])
+                if not final_courses and all_relevant:
+                    final_courses = all_relevant[:3]
 
-                # CRITICAL V7 FIX: LEARNING_PATH Contract Enforcement
-                # Always ensure courses and projects/practice tasks are present for Learning Paths
-                if intent_result.intent == IntentType.LEARNING_PATH:
-                    # 1. Ensure at least 6 Courses (fill up if LLM provided fewer)
-                    if len(final_courses) < 6:
-                        logger.info(f"Enforcing Courses for Learning Path (Current: {len(final_courses)}, Needs: 6)")
-                        candidates = courses_context if courses_context else courses
-                        existing_ids = {c.course_id for c in final_courses}
-                        
-                        for c in candidates:
-                            if len(final_courses) >= 6: break
-                            if c.course_id not in existing_ids:
-                                new_c = c.model_copy()
-                                new_c.reason = "إضافي لإكمال مسار التعلم الشامل."
-                                final_courses.append(new_c)
-                                existing_ids.add(c.course_id)
-
-                    # 2. Ensure Projects / Practice Tasks
-                    if not projects:
-                         logger.info("Enforcing Projects/Tasks for Learning Path")
-                         is_soft_skills = any("soft" in sg.skill_area.lower() for sg in skill_groups) or "واصل" in user_message or "soft" in user_message.lower()
-                         projects = self._fallback_projects(intent_result.role or "General", is_soft_skills=is_soft_skills)
-                    
-                    # 3. Ensure Learning Plan (Phases) - Force 3 phases if less or missing
-                    if not learning_plan or len(learning_plan.phases) < 3:
-                         logger.info("Enforcing Complete Phased Plan (3 Phases Minimum)")
-                         learning_plan = LearningPlan(
-                             weeks=12,
-                             hours_per_day=2.0,
-                             phases=[
-                                 LearningPhase(title="المرحلة الأولى: التأسيس والوعي الذاتي", weeks="1-4", skills=["الأساسيات والمفاهيم"], deliverables=["تقييم أولي للمهارات"]),
-                                 LearningPhase(title="المرحلة الثانية: الممارسة والتطبيق", weeks="5-8", skills=["الأدوات المتقدمة"], deliverables=["تطبيق عملي صغير"]),
-                                 LearningPhase(title="المرحلة الثالثة: الإتقان والتخصص", weeks="9-12", skills=["معايير الاحتراف"], deliverables=["مشروع تخرج متكامل"])
-                             ]
-                         )
-
-                    # 4. Mandatory Personalization Follow-up
-                    # If the LLM didn't provide a clarifying_question, add a specific specialization question
-                    if not response.get("clarifying_question"):
-                         followup = "عشان أخصص الخطة دي ليك أكتر، هل حابب تتخصص في مجال معين داخل التخصص ده؟ (مثلاً: Finance, Healthcare, Retail?)"
-                         answer = f"{answer}\n\n{followup}"
-
-                # CRITICAL V6 FIX: Ensure projects are present for Guidance and Projects intents (Legacy check)
-                if intent_result.intent in [IntentType.PROJECT_IDEAS, IntentType.CAREER_GUIDANCE] and not projects:
-                    projects = self._fallback_projects(intent_result.role or "General")
+                return answer, projects, final_courses, skill_groups, learning_plan, cv_dashboard, all_relevant
 
             except Exception as e:
-                logger.error(f"Response building failed: {e}")
-                if not courses:
-                    answer = "للأسف مش لاقي كورسات مناسبة حالياً. ممكن توضحلي أكتر؟"
-                else:
-                    answer, projects, final_courses, skill_groups, learning_plan = self._fallback_response(courses[:5])
-        
-        # At the end, return all collected variables
-        return answer, projects, final_courses, skill_groups, learning_plan, cv_dashboard
+                logger.error(f"Response building failed: {e}", exc_info=True)
+                return "عذراً، حدث خطأ أثناء إعداد الرد. هل يمكنك المحاولة مرة أخرى؟", [], [], [], None, None, []
 
     async def _build_cv_dashboard(self, user_message: str, skill_result: SkillValidationResult) -> tuple:
         """Generate structured CV Dashboard with Rich UI Schema."""
+        # Returns (answer, projects, final_courses, skill_groups, learning_plan, cv_dashboard, all_relevant)
         prompt = f"""User CV Analysis Request:
 {user_message[:6000]}
 
@@ -425,8 +519,6 @@ Ensure strictly valid JSON.
             )
 
             # Parse Dashboard
-            # Note: We pass primitive dicts directly because Pydantic models (CVDashboard) 
-            # defined in models.py now support these dict structures.
             dashboard_data = CVDashboard(
                 candidate=response.get("candidate", {}),
                 score=response.get("score", {}),
@@ -436,7 +528,6 @@ Ensure strictly valid JSON.
                 projects=response.get("projects", []),
                 atsChecklist=response.get("atsChecklist", []),
                 notes=response.get("notes", {}),
-                # Legacy fallback field
                 recommendations=[str(p.get('title', 'Project')) for p in response.get("projects", [])]
             )
 
@@ -446,15 +537,13 @@ Ensure strictly valid JSON.
                      f"**Summary:** {dashboard_data.roleFit.get('summary', '')}\n\n" \
                      f"Check the Dashboard below for a deep dive into your skills and gaps! ⬇️"
             
-            # CRITICAL User Fix: Fix tokenization of keywords
+            # Fix tokenization of keywords
             missing = dashboard_data.skills.missing
             clean_missing = []
             for m in missing:
                  if isinstance(m, dict):
                       name = m.get("name", "")
-                      # Split camelCase or distinct words if stuck together
                       import re
-                      # Basic split by capital letter if length is suspicious
                       if len(name) > 15 and " " not in name: 
                            name = " ".join(re.findall('[A-Z][^A-Z]*', name))
                       m["name"] = name
@@ -463,23 +552,19 @@ Ensure strictly valid JSON.
                       clean_missing.append(m)
             dashboard_data.skills.missing = clean_missing
 
-            # CRITICAL User Fix: Fetch Courses for "course_needs" from Catalog
-            # Even if score is high, we must show growth courses.
+            # Fetch Courses for "course_needs" from Catalog
             course_needs = response.get("course_needs", [])
             final_courses = []
             from data_loader import data_loader
             
             for need in course_needs:
                  topic = need.get("topic", "")
-                 # Search catalog
                  results = data_loader.search_courses_by_title(topic)
                  if not results:
-                      # Try category or skill lookup
                       skill_info = data_loader.get_skill_info(topic)
                       if skill_info:
                            results = data_loader.get_courses_for_skill(skill_info.get("skill_norm", ""))
                  
-                 # Add top 2 results
                  for c_dict in results[:2]:
                       c_obj = CourseDetail(**c_dict)
                       c_obj.reason = f"{need.get('type', 'Growth').title()}: {need.get('rationale', 'Recommended for you.')}"
@@ -488,29 +573,34 @@ Ensure strictly valid JSON.
 
             # Map Portfolio Actions to Projects
             projects = []
-            for act in response.get("portfolio_actions", []):
+            raw_projects = response.get("projects", [])
+            portfolio_acts = response.get("portfolio_actions", [])
+            combined_acts = raw_projects + portfolio_acts
+            
+            for act in combined_acts:
                  projects.append(ProjectDetail(
-                      title=act.get("title", "Project"),
-                      difficulty=act.get("level", "Intermediate"),
+                      title=act.get("title", act.get("name", "Project")),
+                      difficulty=act.get("level", act.get("difficulty", "Intermediate")),
                       description=act.get("description", ""),
                       deliverables=act.get("deliverables", []),
-                      suggested_tools=act.get("skills_targeted", [])
+                      suggested_tools=act.get("skills_targeted", act.get("skills", []))
                  ))
             
-            # Map Recommendations strictly
+            if not projects:
+                 projects = self._fallback_projects(dashboard_data.candidate.get('targetRole', 'your role'))
+
             dashboard_data.recommendations = response.get("recommendations", [])
 
-            return answer, projects, final_courses, [], None, dashboard_data
-
+            return answer, projects, final_courses, [], None, dashboard_data, []
         except Exception as e:
             logger.error(f"CV Dashboard generation failed: {e}")
-            return "Analysis failed. Please try again.", [], [], [], None, None
+            return "عذراً، حدث خطأ أثناء تحليل السيرة الذاتية.", [], [], [], None, None, []
 
     async def build_fallback(
         self,
         user_message: str,
         topic: str
-    ) -> tuple[str, List[ProjectDetail], List[CourseDetail], List[SkillGroup], Optional[LearningPlan]]:
+    ) -> tuple:
         """
         Generate a smart fallback response for out-of-scope topics.
         """
@@ -538,35 +628,41 @@ Output JSON:
                 system_prompt="You are a helpful assistant handling out-of-scope queries.",
                 temperature=0.3
             )
-            return response.get("answer", "عذراً، هذا المجال غير متوفر حالياً."), [], [], [], None
+            return response.get("answer", "عذراً، هذا المجال غير متوفر حالياً."), [], [], [], None, None, []
         except Exception:
-             return "عذراً، هذا الموضوع غير متوفر في الكتالوج حالياً.", [], [], [], None
+             return "عذراً، هذا الموضوع غير متوفر في الكتالوج حالياً.", [], [], [], None, None, []
 
     def _fallback_projects(self, topic: str, is_soft_skills: bool = False) -> List[ProjectDetail]:
         """Generate template projects or practice tasks if LLM fails."""
         topic_lower = topic.lower()
         
-        # Guardrail: Sales Manager Projects
         if "sales" in topic_lower or "مبيعات" in topic_lower:
              return [
-                ProjectDetail(title="Sales Pipeline Development", difficulty="Intermediate", description="Design a complete sales funnel and stages.", deliverables=["Pipeline Doc", "CRM Field Map"], suggested_tools=["CRM", "Excel"], level="Intermediate", skills=["Sales Strategy"]),
-                ProjectDetail(title="Mock Discovery Call", difficulty="Beginner", description="Roleplay a discovery call with a prospect.", deliverables=["Call Script", "Objection Handling Sheet"], suggested_tools=["Zoom/Voice"], level="Beginner", skills=["Communication"]),
-                ProjectDetail(title="Q4 Forecast Model", difficulty="Advanced", description="Build a revenue forecast model for the team.", deliverables=["Forecast Sheet", "Sensitivity Analysis"], suggested_tools=["Excel", "PowerBI"], level="Advanced", skills=["Forecasting"])
+                ProjectDetail(title="Sales Pipeline Development", difficulty="Intermediate", description="Design a complete sales funnel and stages.", deliverables=["Pipeline Doc", "CRM Field Map"], suggested_tools=["CRM", "Excel"]),
+                ProjectDetail(title="Mock Discovery Call", difficulty="Beginner", description="Roleplay a discovery call with a prospect.", deliverables=["Call Script", "Objection Handling Sheet"], suggested_tools=["Zoom/Voice"]),
+                ProjectDetail(title="Q4 Forecast Model", difficulty="Advanced", description="Build a revenue forecast model for the team.", deliverables=["Forecast Sheet", "Sensitivity Analysis"], suggested_tools=["Excel", "PowerBI"])
             ]
+
+        if any(x in topic_lower for x in ["data", "analysis", "sql", "excel", "داتا", "تحليل", "بيانات"]):
+             return [
+                ProjectDetail(title="Sales Performance Dashboard", difficulty="Intermediate", description="Build an interactive dashboard to track sales KPIs.", deliverables=["Interactive Dashboard", "Data Model"], suggested_tools=["Excel", "PowerBI", "Tableau"]),
+                ProjectDetail(title="Customer Churn Analysis", difficulty="Advanced", description="Analyze customer data to identify churn factors.", deliverables=["Analysis Report", "Churn Prediction Model"], suggested_tools=["Python", "SQL", "Pandas"]),
+                ProjectDetail(title="Retail Inventory Report", difficulty="Beginner", description="Clean and analyze retail inventory data.", deliverables=["Cleaned Dataset", "Summary Report"], suggested_tools=["Excel", "Spreadsheets"])
+             ]
 
         if is_soft_skills:
              return [
-                ProjectDetail(title="Role-Playing Session", difficulty="All Levels", description=f"Practice {topic} scenarios with a peer or mentor.", deliverables=["Session Log", "Feedback Note"], suggested_tools=["Voice Recorder", "Notes"], level="All Levels", skills=[topic, "Communication"]),
-                ProjectDetail(title="Situation Analysis", difficulty="Intermediate", description="Analyze a recent workplace conflict or event.", deliverables=["Analysis Report", "Action Plan"], suggested_tools=["Journal"], level="Intermediate", skills=[topic, "Critical Thinking"]),
-                ProjectDetail(title="Mock Presentation", difficulty="Advanced", description="Prepare and deliver a 10-min talk.", deliverables=["Slide Deck", "Video Recording"], suggested_tools=["PowerPoint", "Camera"], level="Advanced", skills=[topic, "Public Speaking"])
+                ProjectDetail(title="Role-Playing Session", difficulty="All Levels", description=f"Practice {topic} scenarios with a peer or mentor.", deliverables=["Session Log", "Feedback Note"], suggested_tools=["Voice Recorder", "Notes"]),
+                ProjectDetail(title="Situation Analysis", difficulty="Intermediate", description="Analyze a recent workplace conflict or event.", deliverables=["Analysis Report", "Action Plan"], suggested_tools=["Journal"]),
+                ProjectDetail(title="Mock Presentation", difficulty="Advanced", description="Prepare and deliver a 10-min talk.", deliverables=["Slide Deck", "Video Recording"], suggested_tools=["PowerPoint", "Camera"])
             ]
         
         return [
-            ProjectDetail(title=f"{topic} Starter", difficulty="Beginner", description="Basic app to practice fundamentals.", deliverables=["Console App"], suggested_tools=["IDE"], level="Beginner", skills=["IDE"]),
-            ProjectDetail(title=f"{topic} Core App", difficulty="Intermediate", description="CRUD application with database.", deliverables=["Web App", "DB Schema"], suggested_tools=["Framework"], level="Intermediate", skills=["Framework"]),
-            ProjectDetail(title=f"{topic} Pro Suite", difficulty="Advanced", description="Full-scale solution.", deliverables=["Microservices", "CI/CD"], suggested_tools=["Docker"], level="Advanced", skills=["Docker"])
+            ProjectDetail(title=f"{topic} Starter", difficulty="Beginner", description="Basic app to practice fundamentals.", deliverables=["Console App"], suggested_tools=["IDE"]),
+            ProjectDetail(title=f"{topic} Core App", difficulty="Intermediate", description="CRUD application with database.", deliverables=["Web App", "DB Schema"], suggested_tools=["Framework"]),
+            ProjectDetail(title=f"{topic} Pro Suite", difficulty="Advanced", description="Full-scale solution.", deliverables=["Microservices", "CI/CD"], suggested_tools=["Docker"])
         ]
 
     def _fallback_response(self, courses: List[CourseDetail]):
         titles = "\n".join([f"- {c.title}" for c in courses])
-        return f"لقيتلك الكورسات دي:\n{titles}", [], courses, [], None
+        return f"لقيتلك الكورسات دي:\n{titles}", [], courses, [], None, None, []

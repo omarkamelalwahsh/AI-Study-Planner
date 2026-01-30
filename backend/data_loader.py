@@ -134,13 +134,15 @@ class DataLoader:
         return matches.iloc[0].to_dict()
     
     def search_courses_by_title(self, query: str) -> List[dict]:
-        """Search courses by title (case-insensitive partial match)."""
+        """Search courses by title OR category (case-insensitive partial match)."""
         if self.courses_df is None:
             return []
         
         query_lower = query.lower()
+        # V6 Fix: Search in Title AND Category
         matches = self.courses_df[
-            self.courses_df['title'].str.lower().str.contains(query_lower, na=False)
+            self.courses_df['title'].str.lower().str.contains(query_lower, na=False) |
+            self.courses_df['category'].str.lower().str.contains(query_lower, na=False)
         ]
         return matches.to_dict('records')
     

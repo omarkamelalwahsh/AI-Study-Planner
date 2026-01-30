@@ -247,6 +247,8 @@ class SkillExtractor:
             'ui/ux designer': ['user experience', 'user interface', 'figma', 'design thinking'],
             'designer': ['design', 'user experience', 'user interface', 'figma'],
             'content creator': ['content creation', 'video editing', 'storytelling', 'social media marketing', 'copywriting'],
+            'graphic design': ['photoshop', 'illustrator', 'indesign', 'graphic design', 'adobe xd'],
+            'graphic designer': ['photoshop', 'illustrator', 'indesign', 'graphic design', 'adobe xd'],
             
             # Arabic Roles - عربي
             'مبرمج': ['programming', 'python', 'javascript', 'web development'],
@@ -260,6 +262,7 @@ class SkillExtractor:
             'مدير مبيعات': ['sales strategy', 'negotiation', 'team management', 'crm', 'business development', 'leadership', 'sales operations'],
             'مدير تسويق': ['marketing', 'digital marketing', 'social media'],
             'مدير موارد بشرية': ['human resources', 'recruitment', 'training'],
+            'مصمم جرافيك': ['photoshop', 'illustrator', 'indesign', 'graphic design'],
             
             # Management + Tech Combo - Arabic (مثل "مدير مبرمجين")
             'مدير مبرمجين': ['leadership', 'team management', 'programming', 'agile', 'project management', 'code review'],
@@ -272,6 +275,13 @@ class SkillExtractor:
             # Franco-Arab (Arabizi) - فرانكو
             'developer': ['programming', 'web development', 'javascript', 'python'],
             'programmer': ['programming', 'python', 'javascript'],
+            
+            # Web Specific - Arabic/Franco
+            'باك اند': ['python', 'node.js', 'sql', 'api', 'databases'],
+            'backend': ['python', 'node.js', 'sql', 'api', 'databases'],
+            'فرونت اند': ['html', 'css', 'javascript', 'react', 'web development'],
+            'frontend': ['html', 'css', 'javascript', 'react', 'web development'],
+            
             'manager': ['leadership', 'team management', 'communication', 'project management'],
             'leader': ['leadership', 'team management', 'communication'],
             'analyst': ['data analysis', 'excel', 'sql'],

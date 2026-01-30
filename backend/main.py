@@ -174,45 +174,13 @@ async def upload_cv(
         filename = file.filename.lower()
         extracted_text = ""
 
-        # Basic Text Extraction (Production requires robust OCR/Parser)
+        # Use dedicated FileService for parsing
         try:
-            if filename.endswith(".pdf"):
-                try:
-                    import pypdf
-                    from io import BytesIO
-                    reader = pypdf.PdfReader(BytesIO(content))
-                    extracted_text = "\n".join([page.extract_text() for page in reader.pages])
-                except ImportError:
-                    logger.warning("pypdf not installed. Install via: pip install pypdf")
-                    extracted_text = "PDF Parser unavailable. Please install pypdf."
-                except Exception as pdf_err:
-                     logger.warning(f"PDF parsing error: {pdf_err}")
-                     extracted_text = "Error parsing PDF file."
-                     
-            elif filename.endswith(".docx"):
-                try:
-                    import docx
-                    from io import BytesIO
-                    doc = docx.Document(BytesIO(content))
-                    extracted_text = "\n".join([para.text for para in doc.paragraphs])
-                except ImportError:
-                    logger.warning("python-docx not installed. Install via: pip install python-docx")
-                    extracted_text = "Docx module unavailable. Please install python-docx."
-                except Exception as docx_err:
-                     logger.warning(f"DOCX parsing error: {docx_err}")
-                     extracted_text = "Error parsing DOCX file."
-            else:
-                # Try decoding as text
-                try:
-                    extracted_text = content.decode("utf-8")
-                except:
-                    extracted_text = "Unsupported file format. Please upload PDF or DOCX."
+             from services.file_service import FileService
+             extracted_text = FileService.extract_text(content, filename)
         except Exception as e:
-            logger.error(f"File reading error: {e}")
-            extracted_text = "Error reading file content."
-
-        if not extracted_text or not extracted_text.strip():
-             extracted_text = "Empty CV or unreadable format."
+             logger.error(f"FileService failed: {e}")
+             extracted_text = "Error processing file."
 
         # Simulate a Chat Request with the extracted text, forcing CV_UPLOAD intent handling
         conversation_memory.add_user_message(session_id, f"[Uploaded CV: {file.filename}]")
@@ -382,7 +350,7 @@ async def chat(request: ChatRequest):
              
         # Step 3: Skill & Role Extraction
         skill_result = skill_extractor.validate_and_filter(semantic_result)
-        
+
         # If role-based, get skills from roles KB
         if intent_result.role:
             # Try roles knowledge base first
@@ -401,125 +369,144 @@ async def chat(request: ChatRequest):
                     if skill not in existing:
                         skill_result.validated_skills.append(skill)
         
-        if session_state.get("last_skills"):
+        # V7: Intelligent Skill Merging (Anti-Stickiness)
+        # Only merge skills if we are in a 'More' request or a short confirmation
+        is_more_request = any(t in request.message.lower() for t in ["كمان", "غيرهم", "مزيد", "more", "next", "تانية", "تاني", "باقي"])
+        is_short_confirm = (request.message.strip().lower() in ["ياريت", "تمام", "ماشي", "ok", "yes", "confirm", "وافقت", "أيوه", "ايوه"])
+
+        should_merge_context = (is_more_request or is_short_confirm) and not intent_result.role
+        
+        if session_state.get("last_skills") and should_merge_context:
              logger.info(f"[{request_id}] Merging skills from Context: {session_state['last_skills']}")
              existing_skills = set(skill_result.validated_skills)
              for skill in session_state["last_skills"]:
                  if skill not in existing_skills:
                      skill_result.validated_skills.append(skill)
              
-             # Also assume matching domain if possible
              if session_state.get("last_role") and "context_role" not in skill_result.skill_to_domain:
                   skill_result.skill_to_domain["context_role"] = session_state["last_role"]
-
+        
+        # If a NEW role is detected, we should NOT prioritize the old role's context
+        if intent_result.role and intent_result.role != session_state.get("last_role"):
+            logger.info(f"[{request_id}] Domain shift detected: {session_state.get('last_role')} -> {intent_result.role}. Resetting context.")
+            # We don't clear the memory, but we ensure we don't force-fetch old topics
+            session_state["last_topic"] = None 
+            
         logger.info(f"[{request_id}] Validated skills: {skill_result.validated_skills}")
         
-        # Step 4: Retrieval
-        # V6: Context Bridge - If this is a follow-up for "more", ensure we use the previous topic
-        search_topic = intent_result.specific_course or session_state.get("last_topic")
-        
-        courses = []
-        filtered_courses = []
-
-        # Strict RAG Layer Separation: Only retrieve if the intent explicitly needs courses
-        needs_retrieval = intent_result.intent in [
-            IntentType.COURSE_SEARCH, 
-            IntentType.LEARNING_PATH, 
-            IntentType.CAREER_GUIDANCE, # Needed for "How to become X" -> suggest courses
-            IntentType.PROJECT_IDEAS,   # Needed if we want to suggest projects based on courses (optional)
-            IntentType.CV_ANALYSIS,
-            IntentType.COURSE_DETAILS,
-            IntentType.FOLLOW_UP        # If follow up is course related
-        ]
-        
-        # Override for FOLLOW_UP based on context
-        if intent_result.intent == IntentType.FOLLOW_UP and not is_more_request:
-             needs_retrieval = False # Just chat follow up
-
-        if needs_retrieval:
-            courses = retriever.retrieve(
-                skill_result,
-                level_filter=intent_result.level,
-            )
-            
-            # If specific course query OR follow-up without results, search by title/topic
-            if search_topic and (intent_result.specific_course or (is_more_request and not courses)):
-                logger.info(f"[{request_id}] Searching courses by topic/title: {search_topic}")
-                courses = retriever.retrieve_by_title(search_topic)
-            
-            # If still no courses and it's a follow-up, try with last_role
-            if not courses and is_more_request and session_state.get("last_role"):
-                logger.info(f"[{request_id}] Fallback search by last_role: {session_state.get('last_role')}")
-                courses = retriever.retrieve_by_title(session_state.get("last_role"))
-            
-            # Enhance with semantic search if available and few results
-            if semantic_search_enabled and len(courses) < 15:
-                try:
-                    from semantic_search import semantic_search
-                    
-                    # Production Fix: Query Expansion using Semantic Axes
-                    if hasattr(intent_result, 'search_axes') and intent_result.search_axes:
-                         search_query = " ".join(intent_result.search_axes)
-                    else:
-                         search_query = search_topic or request.message
-                         
-                    logger.info(f"[{request_id}] Semantic Retrieval: Using query: '{search_query}'")
-                    semantic_results = semantic_search.search(search_query, top_k=15)
-                    
-                    seen_ids = {c.course_id for c in courses}
-                    for course_id, score in semantic_results:
-                        if course_id not in seen_ids:
-                            course = retriever.get_course_details(course_id)
-                            if course:
-                                courses.append(course)
-                                seen_ids.add(course_id)
-                except Exception as e:
-                    logger.warning(f"Semantic search fallback failed: {e}")
-            
-            logger.info(f"[{request_id}] Retrieved {len(courses)} courses")
-            
-            # Step 5: Relevance Guard
-            # Pass previous context to filter to avoid "is_more_request" filtering failures
-            filtered_courses = relevance_guard.filter(
-                courses,
-                intent_result,
-                skill_result,
-                request.message,
-                previous_domains=set(session_state.get("last_skills", []) + ([session_state.get("last_role")] if session_state.get("last_role") else []))
-            )
-
-            # V6: Pagination Logic - Filter out already shown courses for continuation requests
-            last_shown_ids = session_state.get("last_results_course_ids", [])
-            if is_more_request and last_shown_ids and (intent_result.intent in [IntentType.COURSE_SEARCH, IntentType.CAREER_GUIDANCE]):
-                logger.info(f"[{request_id}] Filtering {len(last_shown_ids)} previously shown courses for pagination.")
-                filtered_courses = [c for c in filtered_courses if c.course_id not in last_shown_ids]
-
-        # If CATALOG_BROWSING, skip heavy retrieval and just get categories
+        # V6: Robust Pagination & Context Persistence
         state_updates = {}
-        if intent_result.intent == IntentType.CATALOG_BROWSING:
-            all_categories = data_loader.get_all_categories()
-            # We don't populate 'courses' or 'filtered_courses' to avoid hallucination in cards
-            state_updates["available_categories"] = all_categories
-            logger.info(f"[{request_id}] Catalog browsing: found {len(all_categories)} categories")
+        is_more_request = any(t in request.message.lower() for t in ["كمان", "غيرهم", "مزيد", "more", "next", "تانية", "تاني", "باقي"])
+        cached_ids = session_state.get("all_relevant_course_ids", [])
         
+        # Determine if we can skip retrieval (More request with cache)
+        # We only reuse if the intent hasn't changed fundamentally (e.g., from search to plan)
+        can_use_cache = is_more_request and cached_ids and (intent_result.intent in [IntentType.COURSE_SEARCH, IntentType.CAREER_GUIDANCE])
+        
+        if can_use_cache:
+            logger.info(f"[{request_id}] 'More' request detected. Using {len(cached_ids)} cached results.")
+            # Load courses from cache IDs
+            courses = []
+            for cid in cached_ids:
+                c = retriever.get_course_details(cid)
+                if c: courses.append(c)
+            filtered_courses = courses
+            # No need to run retriever or relevance guard again
+        else:
+            # Step 4: Retrieval
+            # V6: Context Bridge - If this is a follow-up for "more" but no cache, or new search
+            search_topic = intent_result.specific_course or session_state.get("last_topic")
+            
+            courses = []
+            filtered_courses = []
+
+            # Strict RAG Layer Separation: Only retrieve if the intent explicitly needs courses
+            needs_retrieval = intent_result.intent in [
+                IntentType.COURSE_SEARCH, 
+                IntentType.LEARNING_PATH, 
+                IntentType.CAREER_GUIDANCE, 
+                IntentType.PROJECT_IDEAS,
+                IntentType.CV_ANALYSIS,
+                IntentType.COURSE_DETAILS,
+                IntentType.FOLLOW_UP
+            ]
+            
+            if needs_retrieval:
+                courses = retriever.retrieve(
+                    skill_result,
+                    level_filter=intent_result.level,
+                    focus_area=semantic_result.focus_area,
+                    tool=semantic_result.tool,
+                )
+                
+                if search_topic and (intent_result.specific_course or (is_more_request and not courses)):
+                    logger.info(f"[{request_id}] Searching courses by topic/title: {search_topic}")
+                    courses = retriever.retrieve_by_title(search_topic)
+                
+                if not courses and is_more_request and session_state.get("last_role"):
+                    logger.info(f"[{request_id}] Fallback search by last_role: {session_state.get('last_role')}")
+                    courses = retriever.retrieve_by_title(session_state.get("last_role"))
+                
+                if semantic_search_enabled and len(courses) < 15:
+                    try:
+                        from semantic_search import semantic_search
+                        search_query = " ".join(intent_result.search_axes) if getattr(intent_result, 'search_axes', None) else (search_topic or request.message)
+                        logger.info(f"[{request_id}] Semantic Retrieval: Using query: '{search_query}'")
+                        semantic_results = semantic_search.search(search_query, top_k=20)
+                        seen_ids = {c.course_id for c in courses}
+                        for course_id, score in semantic_results:
+                            if course_id not in seen_ids:
+                                course = retriever.get_course_details(course_id)
+                                if course:
+                                    courses.append(course)
+                                    seen_ids.add(course_id)
+                    except Exception as e:
+                        logger.warning(f"Semantic search fallback failed: {e}")
+                
+                logger.info(f"[{request_id}] Retrieved {len(courses)} raw courses")
+                
+                # Step 5: Relevance Guard
+                filtered_courses = relevance_guard.filter(
+                    courses,
+                    intent_result,
+                    skill_result,
+                    request.message,
+                    previous_domains=set(session_state.get("last_skills", []) + ([session_state.get("last_role")] if session_state.get("last_role") else []))
+                )
+
+                # Cache THE FULL LIST for pagination
+                state_updates["all_relevant_course_ids"] = [c.course_id for c in filtered_courses]
+
+        # V6: Apply Pagination Slicing for ResponseBuilder
+        # The ResponseBuilder now handles slicing via offset, but we need to pass the offset to it.
+        # Ensure offset resets on new search
+        if not is_more_request:
+            state_updates["pagination_offset"] = 0
+            session_state["pagination_offset"] = 0 # Immediate update for build()
+        else:
+            # Offset is managed inside ResponseBuilder.build or here?
+            # User said: "Non-stingy pagination". Let's manage it strictly.
+            pass
+
         # Step 6: Response Builder
-        # Inject brief_explanation into session_state for the prompt
         if semantic_result.brief_explanation:
              session_state["brief_explanation"] = semantic_result.brief_explanation
+        
+        # Context fix: user confirmations
+        short_confirmations = ["ياريت", "تمام", "ماشي", "ok", "yes", "confirm", "وافقت", "أيوه", "ايوه"]
+        if request.message.strip().lower() in short_confirmations:
+            session_state["is_short_confirmation"] = True
+            session_state["last_followup"] = session_state.get("last_followup_question")
 
         # Smart Fallback for Out-of-Scope queries
-        if (intent_result.intent.value == "COURSE_SEARCH" 
-            and not filtered_courses 
-            and not intent_result.specific_course):
-            
-            topic = semantic_result.primary_domain or "Topic"
-            logger.info(f"[{request_id}] Triggering Smart Fallback for topic: {topic}")
-            answer, projects, selected_courses, skill_groups, learning_plan, dashboard = await response_builder.build_fallback(
+        # Smart Fallback for Out-of-Scope queries
+        if (intent_result.intent.value == "COURSE_SEARCH" and not filtered_courses and not intent_result.specific_course):
+            answer, projects, selected_courses, skill_groups, learning_plan, dashboard, all_relevant = await response_builder.build_fallback(
                 request.message,
-                topic
+                semantic_result.primary_domain or "Topic"
             )
         else:
-            answer, projects, selected_courses, skill_groups, learning_plan, dashboard = await response_builder.build(
+            answer, projects, selected_courses, skill_groups, learning_plan, dashboard, all_relevant = await response_builder.build(
                 intent_result,
                 filtered_courses,
                 skill_result,
@@ -527,32 +514,26 @@ async def chat(request: ChatRequest):
                 context=session_state,
             )
         
-        # Add roadmap for career guidance if available (Legacy fallback, V4 uses learning_plan)
-        if intent_result.intent.value == "CAREER_GUIDANCE" and intent_result.role and not learning_plan:
-            roadmap = roles_kb.get_roadmap_for_role(intent_result.role)
-            if roadmap:
-                answer += f"\n\n### 📍 خطة التطور:\n{roadmap}"
-        
         # Step 7: Consistency Check
-        validated_answer, validated_courses = consistency_checker.final_check(
-            answer,
-            selected_courses,
-        )
+        validated_answer, v_courses = consistency_checker.final_check(answer, selected_courses)
+        
+        # New: Consistency check for all_relevant
+        _, v_all_relevant = consistency_checker.final_check("", all_relevant)
         
         # Limit courses for response (display limit)
-        display_courses = relevance_guard.limit_results(validated_courses, max_courses=10)
-
+        display_courses = relevance_guard.limit_results(v_courses, max_courses=10)
+        
         # Update session state with new shown course IDs (Pagination tracking)
-        new_ids = [c.course_id for c in selected_courses]
-        if is_more_request:
-            # Append if we are scrolling
-            combined_ids = list(dict.fromkeys(last_shown_ids + new_ids))
-            state_updates["last_results_course_ids"] = combined_ids
-        else:
-            # Fresh search: Reset IDs
-            state_updates["last_results_course_ids"] = new_ids
+        # In V10, we store ALL relevant IDs for future "more" requests if needed
+        all_ids = [c.course_id for c in v_all_relevant]
+        state_updates["all_relevant_course_ids"] = all_ids
+        
+        shown_ids = [c.course_id for c in v_courses]
+        state_updates["last_results_course_ids"] = shown_ids
 
-        # Store assistant response in memory
+        # Store assistant response in memory (with all state updates)
+        state_updates["last_followup_question"] = getattr(response_builder, 'last_followup_question', "") or ""
+
         conversation_memory.add_assistant_message(
             session_id,
             validated_answer,
@@ -568,6 +549,7 @@ async def chat(request: ChatRequest):
             intent=intent_result.intent.value,
             answer=validated_answer,
             courses=display_courses,
+            all_relevant_courses=v_all_relevant,
             projects=projects,
             skill_groups=skill_groups,
             learning_plan=learning_plan,

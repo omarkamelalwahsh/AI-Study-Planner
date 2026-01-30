@@ -15,6 +15,9 @@ SEMANTIC_SYSTEM_PROMPT = """أنت محلل دلالي (Semantic Analyzer) لن�
 1. استخراج المجالات والمهارات.
 2. توليد "محاور بحث" (Search Axes) وهي كلمات مفتاحية دقيقة للبحث في الكتالوج.
 3. التمييز بين الأدوار (مدير vs مبرمج) طبقاً لقواعد V5.
+4. **تحليل الطلبات المركبة (Compound Queries)**:
+   - "بايثون للداتا بيز" -> Focus: Databases, Tool: Python.
+   - "برمجة للمديرين" -> Focus: Programming, Target: Managers.
 
 قواعد التحليل:
 1. **الدقة (Precision)**:
@@ -22,13 +25,13 @@ SEMANTIC_SYSTEM_PROMPT = """أنت محلل دلالي (Semantic Analyzer) لن�
    - "تقني" (Technical) = Implementation / Coding.
    - إذا كان الطلب استكمالاً (Follow-up) لشيء أصعب، يجب أن تعكس الـ search_axes مهارات متقدمة (Advanced).
 2. **Search Axes**:
+   - يجب أن تشمل الكلمات المفتاحية للـ Focus والـ Tool معاً.
    - إذا كان CATALOG_BROWSING، اخرج قائمة بمجالات البحث العامة المتاحة في الكتالوج.
 3. **Brief Explanation**:
    - اشرح الدور من منظور المسؤولية.
-   - في حالة CATALOG_BROWSING، اذكر نبذة عن تنوع المجالات وشجع المستخدم على الاختيار.
+   - في حالة الطلب المركب، اشرح العلاقة (كيف يستخدم الـ Tool في الـ Focus).
 4. **الدقة التقنية (Technical Accuracy)**:
-   - ابحث عن المعنى الصحيح للمصطلح تقنياً. لا تؤلف معلومات خاطئة (مثلاً: الطباعة ثلاثية الأبعاد ليست عن الألوان RGB).
-   - إذا لم تكن متأكداً من التعريف، قل "مجال تقني متخصص" مع ذكر الكلمات المفتاحية المتعلقة به.
+   - ابحث عن المعنى الصحيح للمصطلح تقنياً.
 
 أجب بـ JSON strict:
 {
@@ -36,8 +39,10 @@ SEMANTIC_SYSTEM_PROMPT = """أنت محلل دلالي (Semantic Analyzer) لن�
     "secondary_domains": ["string"],
     "extracted_skills": ["string"],
     "user_level": "Beginner/Intermediate/Advanced",
-    "brief_explanation": "A high-quality explanation. If CATALOG_BROWSING, list the categories you encourage them to explore.",
-    "search_axes": ["Exact keywords to find in catalog"]
+    "brief_explanation": "A high-quality explanation.",
+    "search_axes": ["Exact keywords"],
+    "focus_area": "string (The main goal/topic, e.g. 'Databases')",
+    "tool": "string (The method/tool used, e.g. 'Python')"
 }"""
 
 
@@ -98,7 +103,10 @@ Analyze and return JSON.
                 search_axes=list(dict.fromkeys([primary] + [
                     str(x) for x in response.get("search_axes", []) 
                     if x and isinstance(x, (str, int, float))
-                ]))
+                ])),
+                # V6 Compound Logic
+                focus_area=response.get("focus_area"),
+                tool=response.get("tool")
             )
             
         except Exception as e:

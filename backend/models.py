@@ -20,6 +20,8 @@ class IntentType(str, Enum):
     ATS_CHECK = "ATS_CHECK"
     AMBIGUOUS = "AMBIGUOUS"
     ERROR = "ERROR"
+    GENERAL_QA = "GENERAL_QA"
+    SAFE_FALLBACK = "SAFE_FALLBACK"
 
 
 class ChatRequest(BaseModel):
@@ -56,11 +58,18 @@ class ProjectDetail(BaseModel):
     skills: List[str] = []
 
 
+class SkillItem(BaseModel):
+    """A specific skill with justification"""
+    name: str
+    why: Optional[str] = None
+    courses_count: Optional[int] = None
+    course_ids: List[str] = [] # V10 Grounding
+
 class SkillGroup(BaseModel):
     """Group of skills for career guidance"""
     skill_area: str
     why_it_matters: str
-    skills: List[str]
+    skills: List[SkillItem]
 
 
 class WeeklySchedule(BaseModel):
@@ -80,12 +89,9 @@ class LearningPhase(BaseModel):
 class LearningPlan(BaseModel):
     """Structured learning plan"""
     weeks: Optional[int] = None
-    hours_per_day: Optional[int] = None
-    schedule: List[WeeklySchedule] = []
-    phases: List[LearningPhase] = [] # V6 Support
-    weeks: Optional[int] = None
     hours_per_day: Optional[float] = None
     schedule: List[WeeklySchedule] = []
+    phases: List[LearningPhase] = [] # V6 Support
 
 
 
@@ -116,6 +122,9 @@ class SemanticResult(BaseModel):
     # V5 New Fields
     brief_explanation: Optional[str] = None
     search_axes: List[str] = []
+    # V6 Compound Query Support
+    focus_area: Optional[str] = None # The "What" (e.g. Database)
+    tool: Optional[str] = None       # The "How" (e.g. Python)
 
 
 class SkillValidationResult(BaseModel):
@@ -154,7 +163,8 @@ class ChatResponse(BaseModel):
     session_id: str
     intent: IntentType
     answer: str
-    courses: List[CourseDetail] = []
+    courses: List[CourseDetail] = [] # Top 3 (recommended_courses)
+    all_relevant_courses: List[CourseDetail] = [] # Full list
     projects: List[ProjectDetail] = []
     skill_groups: List[SkillGroup] = []
     learning_plan: Optional[LearningPlan] = None
