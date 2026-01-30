@@ -13,6 +13,10 @@ export default defineConfig({
             '/health': {
                 target: 'http://localhost:8001',
                 changeOrigin: true,
+            },
+            '/upload-cv': {
+                target: 'http://localhost:8001',
+                changeOrigin: true,
             }
         }
     }

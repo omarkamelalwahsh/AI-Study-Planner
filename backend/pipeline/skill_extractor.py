@@ -3,7 +3,7 @@ Career Copilot RAG Backend - Step 3: Skill Extractor & Validator
 Extracts skills and validates them strictly against the skills catalog.
 """
 import logging
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 
 from data_loader import data_loader
 from models import SemanticResult, SkillValidationResult
@@ -21,6 +21,19 @@ class SkillExtractor:
     3. Prefer specific skills (is_generic=0) over generic ones
     """
     
+    SKILL_ALIASES = {
+        "statistical analysis": "Statistics",
+        "data visualization": "Data Visualization",
+        "visualization": "Data Visualization",
+        "data mining": "Data Analysis",
+        "powerbi": "Power BI",
+        "tableau software": "Tableau",
+        "python programming": "Python",
+        "eda": "Exploratory Data Analysis",
+        "pandas library": "pandas",
+        "numpy library": "numpy"
+    }
+
     def __init__(self):
         self.data = data_loader
     
@@ -36,6 +49,72 @@ class SkillExtractor:
             
         Returns:
             SkillValidationResult with only validated skills
+        """
+    def _apply_track_template(self, validated_skills: List[str], unmatched: List[str], skill_to_domain: Dict[str, str]) -> List[str]:
+        """
+        Apply strict skill templates for known tracks (e.g., Data Analysis).
+        Ensures foundational skills are always present even if not extracted.
+        """
+        # 1. Data Analysis Track
+        da_triggers = ["data analysis", "data analytics", "analysis", "analytics", "تحليل بيانات", "data analyst"]
+        is_data_analysis = any(trigger in (s.lower() for s in unmatched) for trigger in da_triggers) or \
+                           any(trigger in (unmatched) for trigger in da_triggers) or \
+                           any(trigger in (s.lower() for s in validated_skills) for trigger in da_triggers)
+
+        if is_data_analysis:
+            logger.info("Applying 'Data Analysis' Track Template - Enforcing Core Skills")
+            core_da_skills = ["Microsoft Excel", "SQL", "Python", "Statistics", "Data Visualization", "Power BI"]
+            for core in core_da_skills:
+                norm = self._validate_skill(core)
+                if norm and norm not in validated_skills:
+                     validated_skills.append(norm)
+                     skill_to_domain[norm] = "Data Analysis"
+
+        # 2. Sales Manager Template (Priority over Soft Skills)
+        sales_triggers = ["sales manager", "مدير مبيعات", "sales lead", "head of sales", "sales director"]
+        is_sales_manager = any(trigger in (s.lower() for s in (unmatched + validated_skills)) for trigger in sales_triggers) or \
+                           any(trigger in (s.lower() for s in unmatched) for trigger in sales_triggers)
+
+        if is_sales_manager:
+            logger.info("Applying 'Sales Manager' Track Template - Enforcing 50/50 Split")
+            # Mix of Hard Sales Skills + Management
+            # Note: We prioritize skills that map to course categories like "Sales", "Business Fundamentals"
+            core_sales_skills = [
+                "Sales", "Negotiation", "CRM", "Business Development", # Sales side
+                "Leadership", "Team Management", "Strategic Planning"  # Manager side
+            ]
+            for core in core_sales_skills:
+                 norm = self._validate_skill(core)
+                 if norm and norm not in validated_skills:
+                      validated_skills.append(norm)
+                      # Force domain mapping for clean UI grouping
+                      if core in ["Sales", "Negotiation", "CRM", "Business Development"]:
+                          skill_to_domain[norm] = "Sales Strategy"
+                      else:
+                          skill_to_domain[norm] = "Management"
+            
+            # CRITICAL: Return early to prevent Soft Skills overwrite
+            return validated_skills
+
+        # 3. Soft Skills Track (Only if NO specific role matched)
+        soft_triggers = ["soft skills", "مهارات ناعمة", "communication", "تواصل", "leadership", "قيادة", "teamwork", "تعاون"]
+        is_soft_skills = any(trigger in (s.lower() for s in (unmatched + validated_skills)) for trigger in soft_triggers)
+
+        if is_soft_skills:
+            logger.info("Applying 'Soft Skills' Track Template - Enforcing Core Skills")
+            core_soft_skills = ["Communication", "Leadership", "Teamwork", "Problem Solving", "Emotional Intelligence"]
+            for core in core_soft_skills:
+                norm = self._validate_skill(core)
+                if norm and norm not in validated_skills:
+                     validated_skills.append(norm)
+                     skill_to_domain[norm] = "Soft Skills"
+            
+        return validated_skills
+
+    def validate_and_filter(self, semantic_result: SemanticResult) -> SkillValidationResult:
+        """
+        Validate extracted skills against the catalog and filter invalid ones.
+        Returns a structured result with validated skills and domain mapping.
         """
         extracted = semantic_result.extracted_skills or []
         
@@ -55,6 +134,9 @@ class SkillExtractor:
             else:
                 unmatched.append(skill)
         
+        # 2. Production V2: Apply Track Templates (Data Analysis, etc)
+        validated_skills = self._apply_track_template(validated_skills, unmatched, skill_to_domain)
+
         # Sort by specificity (non-generic first)
         validated_skills = self._prioritize_specific(validated_skills)
         
@@ -72,7 +154,16 @@ class SkillExtractor:
         Validate a single skill against the catalog.
         Returns normalized skill name or None if not found.
         """
-        return self.data.validate_skill(skill)
+        # User Fix 3: Check Aliases first (Normalize input first using centralized logic)
+        from data_loader import DataLoader
+        cleaned_skill = DataLoader.normalize_skill(skill)
+        
+        # Check explicit aliases in Extractor first (if any defined locally)
+        if cleaned_skill in self.SKILL_ALIASES:
+             cleaned_skill = self.SKILL_ALIASES[cleaned_skill]
+             cleaned_skill = DataLoader.normalize_skill(cleaned_skill)
+
+        return self.data.validate_skill(cleaned_skill)
     
     def _prioritize_specific(self, skills: List[str]) -> List[str]:
         """
@@ -155,6 +246,7 @@ class SkillExtractor:
             'business analyst': ['business analysis', 'data analysis', 'excel', 'sql', 'communication'],
             'ui/ux designer': ['user experience', 'user interface', 'figma', 'design thinking'],
             'designer': ['design', 'user experience', 'user interface', 'figma'],
+            'content creator': ['content creation', 'video editing', 'storytelling', 'social media marketing', 'copywriting'],
             
             # Arabic Roles - عربي
             'مبرمج': ['programming', 'python', 'javascript', 'web development'],
@@ -165,7 +257,7 @@ class SkillExtractor:
             'عالم بيانات': ['machine learning', 'python', 'statistics', 'deep learning'],
             'مدير مشروع': ['project management', 'agile', 'leadership', 'communication'],
             'مدير منتج': ['product management', 'agile', 'user experience'],
-            'مدير مبيعات': ['sales', 'negotiation', 'leadership', 'communication', 'crm'],
+            'مدير مبيعات': ['sales strategy', 'negotiation', 'team management', 'crm', 'business development', 'leadership', 'sales operations'],
             'مدير تسويق': ['marketing', 'digital marketing', 'social media'],
             'مدير موارد بشرية': ['human resources', 'recruitment', 'training'],
             

@@ -28,7 +28,9 @@ class Conversation:
     created_at: datetime = field(default_factory=datetime.now)
     last_intent: Optional[str] = None
     last_role: Optional[str] = None
+    last_topic: Optional[str] = None
     last_skills: List[str] = field(default_factory=list)
+    state: Dict = field(default_factory=dict)
     
     def add_message(self, role: str, content: str, metadata: dict = None):
         """Add a message to the conversation."""
@@ -59,8 +61,9 @@ class Conversation:
             "created_at": str(self.created_at),
             "last_intent": self.last_intent,
             "last_role": self.last_role,
+            "last_topic": self.last_topic,
             "last_skills": self.last_skills,
-            # We will expand this as needed for V3 specific fields if we store them
+            **self.state
         }
     
     def get_last_user_message(self) -> Optional[str]:
@@ -104,14 +107,17 @@ class ConversationMemory:
         content: str,
         intent: str = None,
         role: str = None,
-        skills: List[str] = None
+        skills: List[str] = None,
+        topic: str = None,
+        state_updates: dict = None
     ) -> Conversation:
         """Add an assistant message with metadata."""
         conv = self.get_or_create(session_id)
         conv.add_message("assistant", content, {
             "intent": intent,
             "role": role,
-            "skills": skills or []
+            "skills": skills or [],
+            "topic": topic
         })
         
         # Update conversation context
@@ -119,8 +125,12 @@ class ConversationMemory:
             conv.last_intent = intent
         if role:
             conv.last_role = role
+        if topic:
+            conv.last_topic = topic
         if skills:
             conv.last_skills = skills
+        if state_updates:
+            conv.state.update(state_updates)
         
         return conv
     
@@ -137,6 +147,11 @@ class ConversationMemory:
         if conv:
             return conv.get_state()
         return {}
+
+    def update_session_state(self, session_id: str, updates: dict) -> None:
+        """Update the session state with new values."""
+        conv = self.get_or_create(session_id)
+        conv.state.update(updates)
     
     def _cleanup_if_needed(self):
         """Remove oldest sessions if we exceed max."""

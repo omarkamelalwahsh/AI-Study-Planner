@@ -74,7 +74,7 @@ class SemanticSearch:
             logger.error(f"Failed to load semantic search: {e}")
             return False
     
-    SCORE_THRESHOLD = 0.7  # Minimum similarity score for a match
+    SCORE_THRESHOLD = 0.6  # Reduced from 0.7 for better recall
     
     def search(
         self,
@@ -117,6 +117,14 @@ class SemanticSearch:
                     
                     course_id = self.id_mapping[idx]
                     results.append((course_id, float(score)))
+            
+            # Fallback: If no results, return top matches regardless of threshold
+            if not results:
+                logger.info("Semantic search yielded 0 results. Applying Fallback (No Threshold).")
+                for idx, score in zip(indices[0], scores[0]):
+                    if idx < len(self.id_mapping) and idx >= 0:
+                        course_id = self.id_mapping[idx]
+                        results.append((course_id, float(score)))
             
             return results
             

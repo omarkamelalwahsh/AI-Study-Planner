@@ -53,6 +53,15 @@ class DataLoader:
         self.courses_df = pd.read_csv(COURSES_CSV)
         logger.info(f"Loaded {len(self.courses_df)} courses")
     
+    @staticmethod
+    def normalize_skill(skill: str) -> str:
+        """Robust skill normalization: lowercase, strip, remove special chars"""
+        import re
+        s = str(skill).lower().strip()
+        s = re.sub(r"[_\-]+", " ", s) # Replace _ and - with space
+        s = re.sub(r"\s+", " ", s)    # Collapse multiple spaces
+        return s
+
     def _load_skills_catalog(self):
         """Load skills catalog and build alias mapping."""
         if not SKILLS_CATALOG_CSV.exists():
@@ -62,17 +71,45 @@ class DataLoader:
         
         # Build skill set and alias mapping
         for _, row in self.skills_df.iterrows():
-            skill_norm = str(row['skill_norm']).lower().strip()
+            skill_norm = self.normalize_skill(row['skill_norm'])
             self.all_skills_set.add(skill_norm)
             
             # Parse aliases (comma-separated)
             aliases_str = str(row.get('aliases', ''))
             if aliases_str and aliases_str != 'nan':
                 for alias in aliases_str.split(','):
-                    alias = alias.strip().lower()
-                    if alias:
-                        self.skill_aliases[alias] = skill_norm
+                    alias_norm = self.normalize_skill(alias)
+                    if alias_norm:
+                        self.skill_aliases[alias_norm] = skill_norm
         
+        # Inject critical manual aliases (Runtime fix for "3D Printing" discrepancy)
+        manual_aliases = {
+            # Database aliases
+            "database": "databases",
+            "data base": "databases",
+            "قواعد بيانات": "databases",
+            "قاعدة بيانات": "databases",
+            "داتا بيز": "databases",
+            "mysql": "databases",
+            "sql": "databases",
+            # 3D Printing aliases
+            "3d printing": "3d modeling",
+            "printing 3d": "3d modeling",
+            "طباعة ثلاثية الابعاد": "3d modeling",
+            "3d": "3d modeling",
+            "3d max": "3d modeling",
+            "ثري دي": "3d modeling",
+            # Graphic Design aliases
+            "جرافيك ديزاين": "graphic design",
+            "تصميم جرافيك": "graphic design",
+            "التصميم الجرافيكي": "graphic design",
+            "graphic design": "graphic design",
+            "design": "graphic design" 
+        }
+        for alias, norm in manual_aliases.items():
+             self.skill_aliases[alias] = norm
+             self.all_skills_set.add(norm) # Ensure target exists
+
         logger.info(f"Loaded {len(self.skills_df)} skills with {len(self.skill_aliases)} aliases")
     
     def _load_skill_to_courses_index(self):

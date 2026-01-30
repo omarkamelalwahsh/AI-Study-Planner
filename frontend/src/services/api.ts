@@ -4,25 +4,66 @@ interface ChatRequest {
 }
 
 interface CourseDetail {
-    id: string;
+    course_id: string;
     title: string;
     level?: string;
     category?: string;
     instructor?: string;
-    duration_hours?: number;
+    duration_hours?: any;
     description?: string;
+    description_short?: string;
+    description_full?: string;
+    cover?: string;
+    reason?: string;
 }
 
 interface ProjectDetail {
     title: string;
-    level: string;
+    difficulty: string;
     description: string;
+    deliverables: string[];
+    suggested_tools: string[];
+    // Legacy support
+    level: string;
     skills: string[];
+}
+
+interface SkillGroup {
+    skill_area: string;
+    why_it_matters: string;
+    skills: string[];
+}
+
+interface WeeklySchedule {
+    week: number;
+    focus: string;
+    courses: string[];
+    outcomes: string[];
+}
+
+interface LearningPlan {
+    weeks?: number;
+    hours_per_day?: number;
+    schedule: WeeklySchedule[];
 }
 
 interface ErrorDetail {
     code: string;
     message: string;
+}
+
+interface CVSection {
+    title: string;
+    score: number;
+    status: string;
+    notes: string;
+}
+
+interface CVDashboard {
+    overall_score: number;
+    sections: CVSection[];
+    missing_keywords: string[];
+    recommendations: string[];
 }
 
 interface ChatResponse {
@@ -31,6 +72,9 @@ interface ChatResponse {
     answer: string;
     courses: CourseDetail[];
     projects: ProjectDetail[];
+    skill_groups: SkillGroup[];
+    learning_plan: LearningPlan | null;
+    dashboard: CVDashboard | null;
     error: ErrorDetail | null;
     request_id: string;
 }
@@ -54,6 +98,25 @@ export async function sendMessage(message: string, sessionId?: string): Promise<
             throw new Error('LLM is currently unavailable. Please try again.');
         }
         throw new Error(`API error: ${response.statusText}`);
+    }
+
+    return response.json();
+}
+
+export async function uploadCV(file: File, sessionId?: string): Promise<ChatResponse> {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (sessionId) {
+        formData.append('session_id', sessionId);
+    }
+
+    const response = await fetch(`${API_BASE_URL}/upload-cv`, {
+        method: 'POST',
+        body: formData,
+    });
+
+    if (!response.ok) {
+        throw new Error(`Upload failed: ${response.statusText}`);
     }
 
     return response.json();

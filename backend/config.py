@@ -27,4 +27,4 @@ SKILLS_CATALOG_CSV = DATA_DIR / "skills_catalog_enriched_v2.csv"
 SKILL_TO_COURSES_INDEX = DATA_DIR / "skill_to_courses_index.json"
 
 # Logging
-LOG_LEVEL = os.getenv("LOG_LEVEL", "info")
+LOG_LEVEL = os.getenv("LOG_LEVEL", "DEBUG")

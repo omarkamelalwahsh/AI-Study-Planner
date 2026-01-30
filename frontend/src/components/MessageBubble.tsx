@@ -39,6 +39,12 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
                     >
                         {copied ? '✓' : '📋'}
                     </button>
+                    {!isUser && (
+                        <div className="feedback-actions">
+                            <button className="feedback-btn like" title="مفيد">👍</button>
+                            <button className="feedback-btn dislike" title="غير مفيد">👎</button>
+                        </div>
+                    )}
                     {message.intent && (
                         <span className="intent-badge">{message.intent}</span>
                     )}

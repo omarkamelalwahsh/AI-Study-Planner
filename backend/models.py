@@ -16,7 +16,10 @@ class IntentType(str, Enum):
     LEARNING_PATH = "LEARNING_PATH"
     FOLLOW_UP = "FOLLOW_UP"
     CONCEPT_EXPLAIN = "CONCEPT_EXPLAIN"
+    CV_ANALYSIS = "CV_ANALYSIS"
+    ATS_CHECK = "ATS_CHECK"
     AMBIGUOUS = "AMBIGUOUS"
+    ERROR = "ERROR"
 
 
 class ChatRequest(BaseModel):
@@ -61,37 +64,30 @@ class SkillGroup(BaseModel):
 
 
 class WeeklySchedule(BaseModel):
-    """One week in a learning plan"""
+    """One week in a learning plan (Legacy)"""
     week: int
     focus: str
-    courses: List[str] = []  # Course IDs
+    courses: List[str] = []
     outcomes: List[str] = []
 
+class LearningPhase(BaseModel):
+    """A phase in a learning path (New V6)"""
+    title: str
+    weeks: str  # e.g. "1-3"
+    skills: List[str] = []
+    deliverables: List[str] = []
 
 class LearningPlan(BaseModel):
     """Structured learning plan"""
+    weeks: Optional[int] = None
+    hours_per_day: Optional[int] = None
+    schedule: List[WeeklySchedule] = []
+    phases: List[LearningPhase] = [] # V6 Support
     weeks: Optional[int] = None
     hours_per_day: Optional[float] = None
     schedule: List[WeeklySchedule] = []
 
 
-class ErrorDetail(BaseModel):
-    """Error information"""
-    code: str
-    message: str
-
-
-class ChatResponse(BaseModel):
-    """Response sent back to frontend"""
-    session_id: str
-    intent: str
-    answer: str
-    courses: List[CourseDetail] = []
-    projects: List[ProjectDetail] = []
-    skill_groups: List[SkillGroup] = []
-    learning_plan: Optional[LearningPlan] = None
-    error: Optional[ErrorDetail] = None
-    request_id: str
 
 
 class IntentResult(BaseModel):
@@ -102,6 +98,12 @@ class IntentResult(BaseModel):
     specific_course: Optional[str] = None
     clarification_needed: bool = False
     clarification_question: Optional[str] = None
+    confidence: float = 0.0
+    slots: dict = {}
+    # V5 Hybrid Policy Flags
+    needs_explanation: bool = False
+    needs_courses: bool = False
+    search_axes: List[str] = [] # Added for V5 Relevance Gate
 
 
 class SemanticResult(BaseModel):
@@ -111,6 +113,9 @@ class SemanticResult(BaseModel):
     extracted_skills: List[str] = []
     user_level: Optional[str] = None  # Beginner, Intermediate, Advanced
     preferences: dict = {}
+    # V5 New Fields
+    brief_explanation: Optional[str] = None
+    search_axes: List[str] = []
 
 
 class SkillValidationResult(BaseModel):
@@ -118,3 +123,41 @@ class SkillValidationResult(BaseModel):
     validated_skills: List[str] = []
     skill_to_domain: dict = {}
     unmatched_terms: List[str] = []
+
+class CVSkillCategory(BaseModel):
+    name: str
+    confidence: float
+
+class CVSkills(BaseModel):
+    strong: List[CVSkillCategory] = []
+    weak: List[CVSkillCategory] = []
+    missing: List[CVSkillCategory] = []
+
+class CVDashboard(BaseModel):
+    """Structured CV Analysis Dashboard (Rich UI Schema)"""
+    candidate: dict = {} # {name, targetRole, seniority}
+    score: dict = {} # {overall, skills, experience, projects, marketReadiness}
+    roleFit: dict = {} # {detectedRoles, direction, summary}
+    skills: CVSkills = CVSkills()
+    radar: List[dict] = [] # [{area, value}]
+    projects: List[dict] = [] # [{title, level, description, skills}]
+    atsChecklist: List[dict] = [] # [{id, text, done}]
+    notes: dict = {} # {strengths, gaps}
+    recommendations: List[str] = [] # Legacy fallback
+
+class ErrorDetail(BaseModel):
+    code: str
+    message: str
+
+class ChatResponse(BaseModel):
+    """Response returned to frontend"""
+    session_id: str
+    intent: IntentType
+    answer: str
+    courses: List[CourseDetail] = []
+    projects: List[ProjectDetail] = []
+    skill_groups: List[SkillGroup] = []
+    learning_plan: Optional[LearningPlan] = None
+    dashboard: Optional[CVDashboard] = None
+    error: Optional[ErrorDetail] = None
+    request_id: Optional[str] = None
