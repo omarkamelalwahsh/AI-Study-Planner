@@ -2,11 +2,18 @@ import { create } from 'zustand';
 
 interface ChatMessage {
     id: string;
-    sender: 'user' | 'assistant';
-    text: string;
+    role: 'user' | 'assistant';
+    content: string;
     timestamp: number;
     intent?: string;
     metadata?: any;
+    // Common fields from API
+    courses?: any[];
+    projects?: any[];
+    skill_groups?: any[];
+    learning_plan?: any;
+    dashboard?: any;
+    catalog_browsing?: any;
 }
 
 interface AppState {
@@ -27,12 +34,12 @@ export const useStore = create<AppState>((set) => ({
     isLoading: false,
     userContext: {},
 
-    addMessage: (msg: Omit<ChatMessage, 'id' | 'timestamp'>) => set((state) => ({
+    addMessage: (msg: any) => set((state) => ({
         messages: [
             ...state.messages,
             {
                 ...msg,
-                id: crypto.randomUUID(),
+                id: msg.id || Math.random().toString(36).substr(2, 9),
                 timestamp: Date.now(),
             }
         ]

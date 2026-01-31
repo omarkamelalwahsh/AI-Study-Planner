@@ -10,43 +10,50 @@ from models import IntentType, IntentResult
 
 logger = logging.getLogger(__name__)
 
-INTENT_SYSTEM_PROMPT = """SYSTEM: You are Career Copilot Orchestrator. You must respond safely and correctly to ANY user query in Arabic/English/mixed.
+INTENT_SYSTEM_PROMPT = """SYSTEM: You are Career Copilot Orchestrator. Classify intent for Arabic/English/mixed queries.
 
-PRIMARY GOALS:
-- Understand the user's intent and choose the correct response mode.
-- Never hallucinate courses or data.
-- Never crash: if uncertain, degrade gracefully with a safe fallback and one clarifying question.
-- Output must be machine-readable JSON that the backend/UI can render.
+HARD RULES:
+1) Output ONLY valid JSON.
+2) NEVER invent course titles.
+3) If confidence < 0.6 => SAFE_FALLBACK with exactly ONE clarifying question.
+4) Definitions ("what is X / يعني ايه X") => GENERAL_QA (even if X is a category). Offer courses only if user asked for courses.
+5) LEARNING_PATH only if the user explicitly asked for plan/roadmap/timeline/steps ("خطة/مسار/roadmap/جدول/خطوات").
 
-HARD RULES (NON-NEGOTIABLE):
-1) NEVER invent course titles. Course lists are only taken from the backend catalog retrieval results.
-2) NEVER produce a learning plan (phases/weeks/projects) unless the user explicitly asks for a plan/roadmap/path/timeline/steps.
-3) If the user asks a definition question ("what is X", "ايه هو X", "يعني ايه X"), answer directly as GENERAL_QA with a short explanation and optionally offer courses after.
-4) If you cannot confidently classify intent (confidence < 0.6), use SAFE_FALLBACK: provide a short helpful response + ask exactly one clarifying question.
-5) Output ONLY valid JSON. No markdown. No extra text.
+INTENT DEFINITIONS (STRICT):
+- CATALOG_BROWSING:
+  ONLY when user asks to browse catalog/categories/list available courses:
+  examples: "ايه الكورسات المتاحة", "اعرض الاقسام", "browse catalog", "categories"
+  NOT for "مش عارف اتعلم ايه" or "عايز حاجة تفتح شغل بسرعة".
 
-SUPPORTED INTENTS:
+- CAREER_GUIDANCE:
+  when user asks: "مش عارف أتعلم إيه", "محتاج حاجة تفتحلي شغل", "ابدأ منين", "ازاي ابقى X"
+  even if they didn't mention a specific topic.
+
+- COURSE_SEARCH:
+  when user asks for courses about a specific topic/skill/category: "كورسات SQL", "وريني كورسات HR", "Web Development"
+
+- OUT_OF_CATALOG (SPECIAL CASE -> still return COURSE_SEARCH but slots.topic must be the requested topic and needs_clarification=false):
+  when user asks for a topic NOT in catalog ("Blockchain Engineering", etc.).
+  The backend should later use SAFE_FALLBACK response builder (no random course recommendations).
+  
 - CV_ANALYSIS: user uploaded CV / asks to analyze CV or evaluate project ("قيم المشروع", "project assessment").
-- COURSE_SEARCH: user asks for courses on a topic or keyword ("عاوز كورس بايثون", "Python courses").
-- LEARNING_PATH: user explicitly asks for a plan/roadmap/path/timeline ("خطة", "مسار", "بدايه", "roadmap").
-- CAREER_GUIDANCE: user asks for role guidance, skills, how to become X (without explicitly asking for a plan).
-- GENERAL_QA: conceptual definition/explanation not requesting courses ("what is Excel?", "ايه هو SQL؟", "يعني ايه...").
-- CATALOG_BROWSING: user asks what courses exist ("ايه الكورسات عندك", "browse catalog").
-- FOLLOW_UP: user refers to previous answer ("more", "show more", "explain that").
+- GENERAL_QA: conceptual definition/explanation not requesting courses.
 - PROJECT_IDEAS: user asks specifically for project/practice ideas.
+- FOLLOW_UP: user refers to previous answer ("more", "show more").
 
-Output JSON:
+OUTPUT JSON:
 {
-  "intent": "...",
+  "intent": "GENERAL_QA|COURSE_SEARCH|CAREER_GUIDANCE|LEARNING_PATH|CV_ANALYSIS|CATALOG_BROWSING|FOLLOW_UP|PROJECT_IDEAS|SAFE_FALLBACK|EXPLORATION",
   "confidence": 0.0-1.0,
   "needs_clarification": true/false,
-  "clarifying_question": "..." | null,
-  "slots": {
-    "topic": "...",
-    "role": "...",
-    "language": "ar|en|mixed"
-  }
-}"""
+  "clarifying_question": "... or null",
+  "slots": { "topic": "...", "role": "...", "language": "ar|en|mixed" }
+}
+
+Guidance:
+- If user says: "مش عارف اتعلم ايه" => intent=CAREER_GUIDANCE (or EXPLORATION) and ask ONE question.
+- If user says: "ايه الكورسات المتاحة" => intent=CATALOG_BROWSING.
+"""
 
 
 class IntentRouter:
@@ -57,221 +64,126 @@ class IntentRouter:
     
     async def classify(self, user_message: str, context: Optional[str] = None) -> IntentResult:
         """
-        Classify the user's intent from their message.
+        Classify the user's intent. (Production V15: Orchestrated with strict rules first).
         """
-        # Manual Overrides for better responsiveness and accuracy
+        # 1. Deterministic Overrides (Fastest Path)
         override_result = self._check_manual_overrides(user_message)
         if override_result:
-            logger.info(f"Manual override intent: {override_result.intent.value}")
             return override_result
             
+        # 2. LLM Path for complex/ambiguous queries
         prompt = f"User Message: \"{user_message}\""
-        
-        if context:
-            prompt = f"Previous Context:\n{context}\n\n{prompt}"
+        if context: prompt = f"Previous Context:\n{context}\n\n{prompt}"
         
         try:
             response = await self.llm.generate_json(
                 prompt=prompt,
                 system_prompt=INTENT_SYSTEM_PROMPT,
-                temperature=0.0,  # Zero temp for strict classification
+                temperature=0.0,
             )
             
             intent_str = response.get("intent", "AMBIGUOUS")
-            confidence = response.get("confidence", 0.0)
             slots = response.get("slots", {})
             
-            # V7 Context Persistence: Short specialization answers to clarifying questions
-            # If msg < 5 words and intent is ambiguous/follow-up, check if context has a strong previous intent
+            # Map slots & Context Persistence
             if (intent_str in ["AMBIGUOUS", "FOLLOW_UP"]) and context and len(user_message.split()) < 5:
-                if "LEARNING_PATH" in context:
-                    intent_str = "LEARNING_PATH"
-                    confidence = 0.95
-                elif "CAREER_GUIDANCE" in context:
-                    intent_str = "CAREER_GUIDANCE"
-                    confidence = 0.95
+                if "LEARNING_PATH" in context: intent_str = "LEARNING_PATH"
+                elif "CAREER_GUIDANCE" in context: intent_str = "CAREER_GUIDANCE"
 
-            # Validate intent type
             try:
                 intent = IntentType(intent_str)
             except ValueError:
-                logger.warning(f"Unknown intent type: {intent_str}, defaulting to GENRAL_QA or AMBIGUOUS")
                 intent = IntentType.AMBIGUOUS
             
             return IntentResult(
                 intent=intent,
-                confidence=confidence,
+                confidence=response.get("confidence", 0.0),
                 slots=slots,
                 role=slots.get("role"),
                 level=slots.get("level"),
-                specific_course=slots.get("topic") if intent == IntentType.COURSE_DETAILS else None,
-                clarification_needed=response.get("needs_clarification", False),
-                clarification_question=response.get("clarifying_question"),
-                # Map slots to V5 flags if needed
+                topic=slots.get("topic"),
+                search_axes=response.get("search_axes", []),
                 needs_courses=(intent in [IntentType.COURSE_SEARCH, IntentType.CATALOG_BROWSING, IntentType.LEARNING_PATH, IntentType.CAREER_GUIDANCE]),
-                needs_explanation=(intent in [IntentType.CAREER_GUIDANCE, IntentType.GENERAL_QA, IntentType.CONCEPT_EXPLAIN, IntentType.LEARNING_PATH])
+                needs_explanation=(intent in [IntentType.CAREER_GUIDANCE, IntentType.GENERAL_QA, IntentType.LEARNING_PATH])
             )
-            
         except Exception as e:
             logger.error(f"Intent classification failed: {e}")
-            return IntentResult(
-                intent=IntentType.AMBIGUOUS,
-                clarification_needed=True,
-                clarification_question="عذراً، لم أفهم طلبك. هل يمكنك توضيح ما تبحث عنه؟"
-            )
+            return IntentResult(intent=IntentType.AMBIGUOUS, clarification_needed=True)
 
     def _check_manual_overrides(self, message: str) -> Optional[IntentResult]:
-        """Check for strict keyword overrides for specific intents (Nuclear Rule 1)."""
-        msg_lower = message.strip().lower()
+        """Strict keyword overrides for production determinism (V15)."""
+        msg = message.strip().lower()
         
-        # 0. COURSE_SEARCH Hard Override for explicit course requests (User Fix 1)
-        # "عاوز كورس بايثون" -> Must be COURSE_SEARCH, never generic explanation
-        course_keywords = ["كورسات", "كورس", "courses", "course", "learn"]
-        if any(kw in msg_lower for kw in course_keywords):
-            # Check if it's not just "what are courses?" (Catalog browsing handled below)
-            # If it has a specific topic (length > ~15 chars usually or contains specific words), assume search
-            # But let's trust the user rule: if "course" + topic found -> Search
-            # Minimal heuristics: if explicitly asking for courses of X
-            pass # Let logic below handle specific phrase matches if needed, or enforce here
-            
-            # User Rule: "If user asks for 'كورسات' or 'course(s)' about a topic... intent MUST be COURSE_SEARCH"
-            # We need to detect "about a topic". Heuristic: message length? Words > 2?
-            # Let's check if it strictly fits the "browse" intent first. If not, and has "course", it's likely search.
+        # V18 FIX 1: EXPLORATION (User doesn't know what to learn - Ask 3 questions)
+        exploration_kws = [
+            "مش عارف", "مش عارفة", "لا أعرف", "مش متأكد", "محتار", "confused",
+            "don't know", "not sure", "help me decide", "أبدأ منين", "ابدأ منين",
+            "عايز حاجة تفتحلي شغل", "تفتحلي شغل", "فتح شغل", "فرصة عمل",
+            "مش عارف اتعلم", "مش عارف ابدا", "مش عارفة ابدا"
+        ]
+        if any(kw in msg for kw in exploration_kws):
+            return IntentResult(intent=IntentType.EXPLORATION, confidence=1.0, needs_explanation=True)
         
-        # 1. CATALOG_BROWSING Hard Override (Scope Guard Rule)
-        browse_triggers = {"ايه المجالات الي عندك", "ايه الكورسات اللي عندكم", "المجالات", "الوظائف", "catalog", "categories", "مجالات", "تصفح", "browse", "إيه الكورسات المتاحة"}
-        if any(t == msg_lower or msg_lower.startswith(t) or t in msg_lower for t in browse_triggers):
-             # Ensure it differentiates from "Python courses"
-             if not any(x in msg_lower for x in ["python", "java", "data", "excel", "marketing", "sales"]):
-                 return IntentResult(intent=IntentType.CATALOG_BROWSING, needs_explanation=False, needs_courses=True)
+        # 1. CATALOG_BROWSING (Requirement A - explicit catalog requests only)
+        catalog_kws = ["ايه الكورسات", "المتاحة", "كتالوج", "browse", "catalog", "categories", "أقسام", "مجالات", "تخصصات", "ايه المتاح"]
+        if any(kw in msg for kw in catalog_kws):
+            return IntentResult(intent=IntentType.CATALOG_BROWSING, confidence=1.0, needs_explanation=True)
 
-        # 2. COURSE_SEARCH Explicit (The fixes)
-        # If user says "course" + topic words, force COURSE_SEARCH
-        if any(x in msg_lower for x in ["عايز كورس", "عاوز كورس", "محتاج كورس", "ورشحلي كورس", "courses for", "course about"]):
-             return IntentResult(intent=IntentType.COURSE_SEARCH, needs_courses=True, confidence=1.0)
-        
-        # General "courses" keyword check if not captured by browse
-        if "كورسات" in msg_lower or "courses" in msg_lower:
-             # If not asking "what are available courses" (handled above), it's likely a search
-             return IntentResult(intent=IntentType.COURSE_SEARCH, needs_courses=True, confidence=0.99)
+        # 2) Exact Category Recognition (Deterministic)
+        # If user mentions a real catalog category, route to COURSE_SEARCH directly.
+        from data_loader import data_loader
+        all_cats = [c.lower() for c in data_loader.get_all_categories()]
+        for cat in all_cats:
+            if cat in msg and len(cat) > 3:
+                return IntentResult(
+                    intent=IntentType.COURSE_SEARCH,
+                    confidence=1.0,
+                    topic=cat,
+                    needs_courses=True,
+                    needs_explanation=True
+                )
 
-        # 3. CAREER_GUIDANCE Hard Override (ازاي ابقى / عايز ابقى)
-        guidance_triggers = {
-            "ازاي ابقى", "عايز ابقى", "عاوز ابقى", "كيف أصبح", "عايز اشتغل", "أريد أن أصبح",
-            "career path", "how to become", " roadmap", "خارطة طريق", "مسار مهني",
-            "ازاي ابقى شاطر", "كيف أكون متميزاً"
+        # 2. Exact Category Recognition (Stop Hallucinations of absence)
+        from data_loader import data_loader
+        all_cats = [c.lower() for c in data_loader.get_all_categories()]
+        for cat in all_cats:
+            if cat in msg and len(cat) > 3: # Avoid short matches like 'ai' if too broad
+                return IntentResult(
+                    intent=IntentType.COURSE_SEARCH,
+                    confidence=1.0,
+                    topic=cat,
+                    needs_courses=True,
+                    needs_explanation=True
+                )
+
+        # 3. COMPOUND MANAGER ROLES (Requirement D)
+        manager_roles = {
+            "مدير مبرمجين": "Engineering Management",
+            "مدير تقني": "Engineering Management",
+            "مدير ai": "Engineering Management",
+            "مدير فريق": "Leadership & Management",
+            "team lead": "Leadership & Management",
+            "engineering manager": "Engineering Management"
         }
-        for trigger in guidance_triggers:
-            if msg_lower.startswith(trigger):
-                 role = msg_lower.replace(trigger, "").strip()
-                 # Grounding for relevance guard
-                 axes = [role] if role else []
-                 # User Rule: set slots.offer_courses=true
-                 return IntentResult(
-                     intent=IntentType.CAREER_GUIDANCE, 
-                     role=role, 
-                     search_axes=axes, 
-                     needs_explanation=True, 
-                     needs_courses=True,
-                     slots={"offer_courses": True}
-                 )
+        for kw, role in manager_roles.items():
+            if kw in msg:
+                return IntentResult(
+                    intent=IntentType.CAREER_GUIDANCE,
+                    confidence=1.0,
+                    role=role,
+                    topic=role,
+                    needs_courses=True,
+                    needs_explanation=True
+                )
 
-        # 3. CV_ANALYSIS Hard Override
-        cv_keywords = ["cv", "resume", "سيرة ذاتية", "السيرة الذاتية", "profile", "evaluate", "review", "analysis", "قيم", "راجع", "تحليل", "project assessment", "grade my project", "قيم المشروع"]
-        if any(x in msg_lower for x in cv_keywords):
-             # Ensure it's not "evaluate course" or "market analysis" (Context check?)
-             # But "evaluate" usually implies feedback.
-             # Differentiate "data analysis" query from "do analysis on me"
-             if "data analysis" in msg_lower and "course" in msg_lower:
-                 pass # Fallthrough to search
-             elif "market" in msg_lower:
-                 pass # Fallthrough to QA
-             else:
-                 # If explicit action words found
-                 action_words = ["check", "rate", "review", "analyze", "evaluate", "قيم", "راجع", "حلل", "شوف"]
-                 if any(w in msg_lower for w in action_words):
-                      return IntentResult(intent=IntentType.CV_ANALYSIS, needs_explanation=True)
-
-        # 4. Learning Path (Strict - ONLY if plan/roadmap/steps requested)
-        roadmap_keywords = ["خطة", "مسار", "بدايه", "roadmap", "step by step", "timeline", "ابدأ اتعلم", "بداية", "أبدا في"]
-        if any(kw in msg_lower for kw in roadmap_keywords):
-             return IntentResult(
-                intent=IntentType.LEARNING_PATH,
-                confidence=1.0,
-                needs_courses=True,
-                needs_explanation=True
-            )
-
-        # Soft Skills / General Guidance -> CAREER_GUIDANCE
-        soft_skills_keywords = ["communication", "leadership", "time management", "soft skills", "مهارات ناعمة", "تواصل", "قيادة", "problem solving"]
-        if any(kw in msg_lower for kw in soft_skills_keywords):
-             return IntentResult(
-                intent=IntentType.CAREER_GUIDANCE,
-                confidence=1.0,
-                needs_courses=True,
-                needs_explanation=True
-            )
-
-        # 4. Career Guidance (General)
-        career_keywords = ["نصيحة", "إرشاد", "توجيه", "career", "guidance", "تنصحني بإيه", "أعمل إيه"]
-        if any(kw in msg_lower for kw in career_keywords):
-            return IntentResult(intent=IntentType.CAREER_GUIDANCE, confidence=0.9, needs_explanation=True)
-
-        # 5. Project Ideas
-        project_keywords = ["مشروع", "projects", "project", "مشاريع", "أفكار مشاريع", "capstone"]
-        opinion_keywords = ["رايك", "opinion", "think", "evaluate", "تفتكر", "تقييمك"]
-        if any(kw in msg_lower for kw in project_keywords) and not ("manage" in msg_lower or "مدير" in msg_lower):
-             # Guard: If asking for opinion ("ايه رايك في المشروع"), it's likely General Chat/QA, not requesting new ideas
-             if any(ok in msg_lower for ok in opinion_keywords):
-                 return IntentResult(intent=IntentType.GENERAL_QA, needs_explanation=True)
-                 
-             return IntentResult(intent=IntentType.PROJECT_IDEAS, confidence=0.9, role=self._extract_potential_role(message) or "General")
-
-        # 6. CV Analysis Trigger (Text-based)
-        cv_triggers = ["قيم", "evaluate", "review", "cv", "resume", "سيفي", "السي في", "السيرة الذاتية", "راجع"]
-        if any(kw in msg_lower for kw in cv_triggers) and len(message.split()) < 10: # Short command likely
+        # 3. OTHER DETERMINISTIC RULES
+        if any(kw in msg for kw in ["خطة", "مسار", "roadmap", "roadmap", "path"]):
+            return IntentResult(intent=IntentType.LEARNING_PATH, confidence=1.0, needs_courses=True, needs_explanation=True)
+            
+        if any(kw in msg for kw in ["سيفي", "cv", "سيرة ذاتية", "قيم المشروع"]):
             return IntentResult(intent=IntentType.CV_ANALYSIS, confidence=1.0)
-            
-        # 4. CONCEPT_EXPLAIN / GENERAL_QA Hard Override
-        # User Rule: "what is" -> GENERAL_QA unless asking for courses
-        concept_triggers = {
-            "يعني ايه", "ايه هو", "ايه هي", "ما هو", "ما هي", "تعريف", "what is", "define"
-        }
-        for trigger in concept_triggers:
-            if msg_lower.startswith(trigger):
-                 # Guard: If asking "What is the best course", that's search/advice, not definition
-                 if "course" in msg_lower or "كورس" in msg_lower:
-                     continue
-                 
-                 topic = msg_lower.replace(trigger, "").strip()
-                 return IntentResult(intent=IntentType.GENERAL_QA, specific_course=topic, search_axes=[topic] if topic else [], needs_explanation=True, needs_courses=False)
 
-        # 5. FOLLOW_UP / CONTEXT REUSE Hard Override (كمان / اصعب)
-        # Patch: Specific triggers for "more courses" should map to COURSE_SEARCH
-        more_courses_triggers = {
-            "في كورسات كمان", "غيرهم", "مزيد من الدورات", "more courses", "كورس كمان", 
-            "كورسات تانية", "هل في كورسات كمان", "هل في كورسات غيرها", "مشوفناش كورسات تانية",
-            "ليها كورسات", "هل ليها كورسات", "رشحلي كورسات", "في كورسات", "courses", "كورسات"
-        }
-        if any(t in msg_lower for t in more_courses_triggers):
-             return IntentResult(intent=IntentType.COURSE_SEARCH, needs_courses=True)
-
-        follow_up_triggers = {
-            "كمان", "اصعب", "أصعب", "مستواه أصعب", "مشاريع أكتر", "عرض المزيد", 
-            "غيرهم", "تفاصيل", "more", "next", "المزيد"
-        }
-        if any(t in msg_lower for t in follow_up_triggers):
-            # We return FOLLOW_UP and let the pipeline decide what to reuse
-            return IntentResult(intent=IntentType.FOLLOW_UP, needs_courses=True)
-
-        # 6. PROJECT_IDEAS Hard Override
-        project_triggers = {"افكار مشاريع", "مشاريع اعملها", "projects", "project ideas", "اعمل مشروع", "build a project"}
-        if any(t in msg_lower for t in project_triggers):
-            return IntentResult(intent=IntentType.PROJECT_IDEAS)
-
-        # 7. LEARNING_PATH Hard Override
-        plan_triggers = {"خطة", "plan", "جدول", "roadmap"}
-        if any(t in msg_lower for t in plan_triggers) and any(x in msg_lower for x in ["اسابيع", "ساعات", "يوميا", "weeks", "hours"]):
-            return IntentResult(intent=IntentType.LEARNING_PATH, needs_courses=True)
+        if any(kw in msg for kw in ["غيرهم", "كمان", "more", "next", "المزيد"]):
+            return IntentResult(intent=IntentType.FOLLOW_UP, confidence=1.0)
 
         return None

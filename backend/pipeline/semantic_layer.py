@@ -11,38 +11,35 @@ from models import IntentResult, SemanticResult
 logger = logging.getLogger(__name__)
 
 SEMANTIC_SYSTEM_PROMPT = """أنت محلل دلالي (Semantic Analyzer) لنظام Career Copilot.
-مهمتك:
-1. استخراج المجالات والمهارات.
-2. توليد "محاور بحث" (Search Axes) وهي كلمات مفتاحية دقيقة للبحث في الكتالوج.
-3. التمييز بين الأدوار (مدير vs مبرمج) طبقاً لقواعد V5.
-4. **تحليل الطلبات المركبة (Compound Queries)**:
-   - "بايثون للداتا بيز" -> Focus: Databases, Tool: Python.
-   - "برمجة للمديرين" -> Focus: Programming, Target: Managers.
+نظامنا يعمل بـ 28 قسم (Category) محددة مسبقاً. مهمتك هي ربط سؤال المستخدم بهذه الأقسام بدقة.
 
-قواعد التحليل:
-1. **الدقة (Precision)**:
-   - "مدير" = Engineering Management / Team Leadership.
-   - "تقني" (Technical) = Implementation / Coding.
-   - إذا كان الطلب استكمالاً (Follow-up) لشيء أصعب، يجب أن تعكس الـ search_axes مهارات متقدمة (Advanced).
-2. **Search Axes**:
-   - يجب أن تشمل الكلمات المفتاحية للـ Focus والـ Tool معاً.
-   - إذا كان CATALOG_BROWSING، اخرج قائمة بمجالات البحث العامة المتاحة في الكتالوج.
-3. **Brief Explanation**:
-   - اشرح الدور من منظور المسؤولية.
-   - في حالة الطلب المركب، اشرح العلاقة (كيف يستخدم الـ Tool في الـ Focus).
-4. **الدقة التقنية (Technical Accuracy)**:
-   - ابحث عن المعنى الصحيح للمصطلح تقنياً.
+الأقسام المتاحة (Actual Catalog Categories):
+[Banking Skills, Business Fundamentals, Career Development, Creativity and Innovation, Customer Service, Data Security, Digital Media, Disaster Management and Preparedness, Entrepreneurship, Ethics and Social Responsibility, Game Design, General, Graphic Design, Health & Wellness, Human Resources, Leadership & Management, Marketing Skills, Mobile Development, Networking, Personal Development, Programming, Project Management, Public Speaking, Sales, Soft Skills, Sustainability, Technology Applications, Web Development]
+
+أهدافك:
+1. **استخراج المحاور (Multi-Axis Analysis)**:
+   - أي طلب مركب (مثلاً: مدير مبرمجين) يجب تقسيمه لمحاور:
+     - محور إداري (Leadership & Management / Project Management / Business Fundamentals)
+     - محور تقني (Programming / Web Development / Technology Applications)
+2. **Catalog Honesty**:
+   - إذا طلب المستخدم مجالاً غير موجود (مثل AI أو Blockchain أو لغة برمجة معينة)، ابحث عن أقرب "Category" عامة له (مثلاً AI -> Technology Applications).
+   - إذا كان المجال بعيداً تماماً عن الكتالوج، ضع "is_in_catalog": false وضع اسم المجال في "missing_domain".
+3. **الدقة في الاختيار**:
+   - اختر الأقسام الأكثر صلة فقط من القائمة أعلاه.
 
 أجب بـ JSON strict:
 {
-    "primary_domain": "string (The core topic/role)",
-    "secondary_domains": ["string"],
+    "primary_domain": "string (The core topic/role, e.g. 'Sales Manager')",
+    "axes": [
+        {"name": "Management", "categories": ["..."]},
+        {"name": "Technical", "categories": ["..."]}
+    ],
     "extracted_skills": ["string"],
     "user_level": "Beginner/Intermediate/Advanced",
-    "brief_explanation": "A high-quality explanation.",
-    "search_axes": ["Exact keywords"],
-    "focus_area": "string (The main goal/topic, e.g. 'Databases')",
-    "tool": "string (The method/tool used, e.g. 'Python')"
+    "brief_explanation": "شرح دقيق بالعربي للدور ومسؤولياته.",
+    "is_in_catalog": true/false,
+    "missing_domain": "string if not in catalog, else null",
+    "search_axes": ["Exact keywords for RAG"]
 }"""
 
 
@@ -60,19 +57,13 @@ class SemanticLayer:
     ) -> SemanticResult:
         """
         Extract semantic information using LLM.
-        
-        Args:
-            user_message: The user's input text
-            intent_result: The result from the Intent Router
-            previous_topic: The topic of the previous turn (for context)
-            
-        Returns:
-            SemanticResult object
         """
+        from data_loader import data_loader
+        
         # Construct dynamic system prompt
         system_prompt = SEMANTIC_SYSTEM_PROMPT
         if previous_topic:
-             system_prompt += f"\n\nCONTEXT INFO:\nPrevious Topic: {previous_topic}\nIf user asks a vague follow-up (e.g., 'what skills', 'how to start'), assume they refer to '{previous_topic}'."
+             system_prompt += f"\n\n[CONTEXT] Previous Topic: \"{previous_topic}\".\nIf the user message is vague or a short follow-up, interpret it as a request for \"{previous_topic}\"."
 
         prompt = f"""
 User Message: "{user_message}"
@@ -91,6 +82,15 @@ Analyze and return JSON.
             )
             
             primary = response.get("primary_domain") or intent_result.role or "General"
+            is_in_catalog = response.get("is_in_catalog", True)
+            
+            # --- V17 RULE 4: Category Honesty Check (Uses normalize_category) ---
+            norm_to_display = data_loader.get_normalized_categories()
+            msg_norm = data_loader.normalize_category(user_message)
+            for cat_norm in norm_to_display:
+                if cat_norm in msg_norm:
+                    is_in_catalog = True
+                    break
             
             return SemanticResult(
                 primary_domain=primary,
@@ -99,14 +99,13 @@ Analyze and return JSON.
                 user_level=response.get("user_level") or intent_result.level,
                 preferences=response.get("preferences", {}),
                 brief_explanation=response.get("brief_explanation"),
-                # V5 Fix: Sanitize axes and include primary domain as first AXIS for better retrieval
+                axes=response.get("axes", []),
+                is_in_catalog=is_in_catalog,
+                missing_domain=response.get("missing_domain") if not is_in_catalog else None,
                 search_axes=list(dict.fromkeys([primary] + [
                     str(x) for x in response.get("search_axes", []) 
                     if x and isinstance(x, (str, int, float))
                 ])),
-                # V6 Compound Logic
-                focus_area=response.get("focus_area"),
-                tool=response.get("tool")
             )
             
         except Exception as e:

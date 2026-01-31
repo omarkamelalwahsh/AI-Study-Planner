@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { sendMessage, uploadCV } from '../services/api'
 import { useStore } from '../store/store'
 import CourseCard from './CourseCard'
@@ -12,8 +12,10 @@ interface Message {
     role: 'user' | 'assistant';
     content: string;
     courses?: any[];
+    all_relevant_courses?: any[];
     projects?: any[];
     skill_groups?: any[];
+    catalog_browsing?: any;
     learning_plan?: any;
     dashboard?: any;
     intent?: string;
@@ -41,9 +43,16 @@ export default function ChatInterface() {
 
     // Load sessions from localStorage on mount
     useEffect(() => {
-        const savedSessions = localStorage.getItem('chatSessions')
-        if (savedSessions) {
-            setSessions(JSON.parse(savedSessions))
+        try {
+            const savedSessions = localStorage.getItem('chatSessions')
+            if (savedSessions) {
+                const parsed = JSON.parse(savedSessions)
+                if (Array.isArray(parsed)) {
+                    setSessions(parsed)
+                }
+            }
+        } catch (e) {
+            console.error("Failed to load sessions", e)
         }
     }, [])
 
@@ -115,11 +124,13 @@ export default function ChatInterface() {
             const assistantMessage: any = {
                 role: 'assistant',
                 content: response.answer,
-                courses: response.courses,
-                projects: response.projects,
-                skill_groups: response.skill_groups,
-                learning_plan: response.learning_plan,
-                dashboard: response.dashboard,
+                courses: response.courses || [],
+                all_relevant_courses: response.all_relevant_courses || [],
+                projects: response.projects || [],
+                skill_groups: response.skill_groups || [],
+                catalog_browsing: response.catalog_browsing || null,
+                learning_plan: response.learning_plan || null,
+                dashboard: response.dashboard || null,
                 intent: response.intent,
             }
 
@@ -304,32 +315,62 @@ export default function ChatInterface() {
                 )}
 
                 {messages.map((msg: any) => (
-                    <div key={msg.id}>
+                    <div key={msg.id} className="message-container">
                         <MessageBubble message={msg} />
 
+                        {msg.catalog_browsing && (
+                            <div className="catalog-browsing-container" style={{ margin: '12px 0 12px 60px' }}>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                                    {msg.catalog_browsing.categories?.map((cat: any, idx: number) => (
+                                        <button
+                                            key={idx}
+                                            className="category-chip"
+                                            onClick={() => setInput(cat.name)}
+                                            style={{
+                                                padding: '6px 14px',
+                                                borderRadius: '20px',
+                                                border: '1px solid #8b5cf6',
+                                                background: 'rgba(139, 92, 246, 0.1)',
+                                                color: '#a78bfa',
+                                                cursor: 'pointer',
+                                                fontSize: '0.9rem'
+                                            }}
+                                        >
+                                            {cat.name}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
                         {msg.dashboard && (
-                            <CVDashboard data={msg.dashboard} />
+                            <div style={{ marginLeft: '60px' }}>
+                                <CVDashboard data={msg.dashboard} />
+                            </div>
                         )}
 
                         {msg.skill_groups && msg.skill_groups.length > 0 && (
-                            <div className="skill-groups-container">
+                            <div className="skill-groups-container" style={{ marginLeft: '60px' }}>
                                 <h3>📊 المهارات المطلوبة:</h3>
                                 <div className="skill-groups-grid">
                                     {msg.skill_groups.map((group: any, idx: number) => (
                                         <SkillGroupCard
                                             key={idx}
                                             group={group}
-                                            allCourses={msg.courses} // Pass courses to find relations
+                                            allCourses={msg.courses}
                                         />
                                     ))}
                                 </div>
                             </div>
                         )}
 
-                        {msg.courses && msg.courses.length > 0 && (!msg.skill_groups || msg.skill_groups.length === 0) && (
-                            <div className="courses-section">
-                                <h3>📚 كورسات مقترحة:</h3>
-                                <div className="courses-grid">
+                        {msg.courses && msg.courses.length > 0 && (
+                            <div className="courses-section" style={{ marginLeft: '60px' }}>
+                                <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <span>🌟 ترشيحات مختارة:</span>
+                                    <span style={{ fontSize: '0.7rem', background: '#3b82f6', color: '#fff', padding: '2px 6px', borderRadius: '4px' }}>Top Picks</span>
+                                </h3>
+                                <div className="courses-grid" style={{ marginBottom: '16px' }}>
                                     {msg.courses.map((course: any) => (
                                         <CourseCard key={course.course_id} course={course} />
                                     ))}
@@ -337,78 +378,83 @@ export default function ChatInterface() {
                             </div>
                         )}
 
-                        {msg.learning_plan && (
-                            <div className="learning-plan-container">
-                                <h3>🗺️ خطة التعلم المقترحة:</h3>
-                                {msg.learning_plan.phases ? (
-                                    <div className="learning-plan-phases">
-                                        {msg.learning_plan.phases.map((phase: any, idx: number) => (
-                                            <div key={idx} className="phase-card" style={{ marginBottom: '16px', background: 'rgba(255,255,255,0.05)', padding: '16px', borderRadius: '8px', borderLeft: '4px solid #8b5cf6' }}>
-                                                <div className="phase-header" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                                                    <h4 style={{ margin: 0, color: '#fff' }}>{phase.title}</h4>
-                                                    <span className="phase-duration" style={{ background: 'rgba(139, 92, 246, 0.2)', color: '#a78bfa', padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem' }}>{phase.weeks} Weeks</span>
-                                                </div>
-                                                <div className="phase-skills" style={{ marginBottom: '8px' }}>
-                                                    {phase.skills.map((s: string, i: number) => (
-                                                        <span key={i} style={{ display: 'inline-block', background: 'rgba(59, 130, 246, 0.1)', color: '#60a5fa', fontSize: '0.8rem', padding: '2px 6px', borderRadius: '4px', marginRight: '6px', marginBottom: '4px' }}>{s}</span>
-                                                    ))}
-                                                </div>
-                                                {phase.deliverables && phase.deliverables.length > 0 && (
-                                                    <div className="phase-deliverables" style={{ fontSize: '0.9rem', color: '#cbd5e1' }}>
-                                                        <strong>🎯 Deliverables:</strong>
-                                                        <ul style={{ margin: '4px 0 0 0', paddingLeft: '20px' }}>
-                                                            {phase.deliverables.map((d: string, i: number) => (
-                                                                <li key={i}>{d}</li>
-                                                            ))}
-                                                        </ul>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <div className="learning-plan-weeks">
-                                        {msg.learning_plan.schedule.map((week: any, idx: number) => (
-                                            <div key={idx} className="plan-week">
-                                                <div className="week-header">أسبوع {week.week}: {week.focus}</div>
-                                                <div className="week-outcomes">
-                                                    {week.outcomes.map((o: string, oIdx: number) => (
-                                                        <div key={oIdx} className="outcome-item">✅ {o}</div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
+                        {msg.all_relevant_courses && msg.all_relevant_courses.length > 0 && (
+                            <div className="all-relevant-section" style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '16px', marginTop: '16px', marginLeft: '60px' }}>
+                                <h3 style={{ fontSize: '1.1rem', color: '#94a3b8' }}>📚 نتائج إضافية ذات صلة:</h3>
+                                <div className="courses-grid">
+                                    {(msg.all_relevant_courses || []).slice(0, 5).map((course: any) => (
+                                        <CourseCard key={course.course_id} course={course} />
+                                    ))}
+                                </div>
+                                {msg.all_relevant_courses.length > 5 && (
+                                    <button
+                                        className="show-more-btn"
+                                        onClick={() => sendMessage(input || "أظهر المزيد من الكورسات")}
+                                        style={{
+                                            marginTop: '12px',
+                                            width: '100%',
+                                            padding: '12px',
+                                            background: 'rgba(59, 130, 246, 0.1)',
+                                            border: '1px dashed #3b82f6',
+                                            borderRadius: '8px',
+                                            color: '#60a5fa',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        ➕ أظهر المزيد من النتائج
+                                    </button>
                                 )}
                             </div>
                         )}
+
+                        {msg.learning_plan && (
+                            <div className="learning-plan-container" style={{ marginLeft: '60px' }}>
+                                <h3>🗺️ خطة التعلم المقترحة:</h3>
+                                <div className="learning-plan-phases">
+                                    {(msg.learning_plan.phases || []).map((phase: any, idx: number) => (
+                                        <div key={idx} className="phase-card" style={{ marginBottom: '16px', background: 'rgba(255,255,255,0.05)', padding: '16px', borderRadius: '8px', borderLeft: '4px solid #8b5cf6' }}>
+                                            <div className="phase-header" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                                                <h4 style={{ margin: 0, color: '#fff' }}>{phase.title}</h4>
+                                                <span className="phase-duration" style={{ background: 'rgba(139, 92, 246, 0.2)', color: '#a78bfa', padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem' }}>{phase.weeks} Weeks</span>
+                                            </div>
+                                            <div className="phase-skills" style={{ marginBottom: '8px' }}>
+                                                {(phase.skills || []).map((s: string, i: number) => (
+                                                    <span key={i} style={{ display: 'inline-block', background: 'rgba(59, 130, 246, 0.1)', color: '#60a5fa', fontSize: '0.8rem', padding: '2px 6px', borderRadius: '4px', marginRight: '6px' }}>{s}</span>
+                                                ))}
+                                            </div>
+                                            {phase.deliverables && (
+                                                <div style={{ fontSize: '0.9rem', color: '#94a3b8' }}>
+                                                    🎯 <strong>Tasks:</strong> {phase.deliverables.join(', ')}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
                         {msg.projects && msg.projects.length > 0 && (
-                            <div className="projects-grid">
-                                {msg.projects.map((project: any, idx: number) => (
-                                    <div key={idx} className="project-card">
-                                        <div className="project-header">
-                                            <span className="project-title">🚀 {project.title}</span>
-                                            <span className={`level-badge level-${(project.difficulty || project.level || 'Beginner').toLowerCase()}`}>
-                                                {project.difficulty || project.level}
-                                            </span>
+                            <div className="projects-section" style={{ marginLeft: '60px' }}>
+                                <h3>🚀 مشاريع تطبيقية:</h3>
+                                <div className="projects-grid">
+                                    {msg.projects.map((project: any, idx: number) => (
+                                        <div key={idx} className="project-card" style={{ background: 'rgba(255,255,255,0.05)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                                <h4 style={{ margin: 0 }}>{project.title}</h4>
+                                                <span className="difficulty-badge" style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: '10px', background: project.difficulty === 'Expert' ? '#ef4444' : '#10b981' }}>{project.difficulty}</span>
+                                            </div>
+                                            <p style={{ fontSize: '0.9rem', color: '#cbd5e1' }}>{project.description}</p>
                                         </div>
-                                        <p className="project-description">{project.description}</p>
-                                        <div className="project-skills">
-                                            {project.skills.map((skill: string, sIdx: number) => (
-                                                <span key={sIdx} className="project-skill-tag">{skill}</span>
-                                            ))}
-                                        </div>
-                                    </div>
-                                ))}
+                                    ))}
+                                </div>
                             </div>
                         )}
                     </div>
                 ))}
 
-                {/* Typing animation */}
+                {/* Typing and loading states */}
                 {isTyping && typingText && (
-                    <div className="message-bubble assistant-message typing-animation">
-                        <div className="message-avatar">🤖</div>
+                    <div className="message-bubble assistant-message">
                         <div className="message-content">
                             <div className="message-text">{typingText}<span className="cursor">|</span></div>
                         </div>
@@ -416,15 +462,15 @@ export default function ChatInterface() {
                 )}
 
                 {isLoading && !isTyping && (
-                    <div className="loading-indicator">
+                    <div className="loading-indicator" style={{ display: 'flex', gap: '8px', padding: '20px', color: '#94a3b8' }}>
                         <div className="spinner"></div>
                         <span>جاري التفكير...</span>
                     </div>
                 )}
 
                 {error && (
-                    <div className="error-message">
-                        <span>⚠️ {error}</span>
+                    <div className="error-message" style={{ color: '#ef4444', padding: '10px 60px' }}>
+                        ⚠️ {error}
                     </div>
                 )}
 
@@ -437,9 +483,8 @@ export default function ChatInterface() {
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    placeholder="اكتب سؤالك هنا... (Enter للإرسال، Shift+Enter لسطر جديد)"
+                    placeholder="اكتب سؤالك هنا... (Enter للإرسال)"
                     disabled={isLoading}
-                    maxLength={500}
                     rows={1}
                 />
                 <input
@@ -447,27 +492,12 @@ export default function ChatInterface() {
                     ref={fileInputRef}
                     onChange={handleFileSelect}
                     style={{ display: 'none' }}
-                    accept=".pdf,.docx,.txt"
                 />
-                <button
-                    type="button"
-                    className="upload-btn"
-                    onClick={triggerFileUpload}
-                    disabled={isLoading}
-                    title="رفع CV (PDF/DOCX)"
-                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '0 10px' }}
-                >
+                <button type="button" className="upload-btn" onClick={triggerFileUpload} disabled={isLoading}>
                     📎
                 </button>
                 <button type="submit" disabled={isLoading || !input.trim()}>
-                    {isLoading ? (
-                        <span className="spinner" style={{ width: '20px', height: '20px', borderTopColor: 'white' }}></span>
-                    ) : (
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M22 2L11 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                            <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                    )}
+                    {isLoading ? '...' : 'Send'}
                 </button>
             </form>
         </div>

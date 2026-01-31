@@ -71,8 +71,10 @@ interface ChatResponse {
     intent: string;
     answer: string;
     courses: CourseDetail[];
+    all_relevant_courses?: CourseDetail[];
     projects: ProjectDetail[];
     skill_groups: SkillGroup[];
+    catalog_browsing: any | null;
     learning_plan: LearningPlan | null;
     dashboard: CVDashboard | null;
     error: ErrorDetail | null;

@@ -1,4 +1,5 @@
 import ChatInterface from './components/ChatInterface'
+import ErrorBoundary from './components/ErrorBoundary'
 
 function App() {
     return (
@@ -12,7 +13,9 @@ function App() {
 
             <main className="app-main">
                 <div className="container">
-                    <ChatInterface />
+                    <ErrorBoundary>
+                        <ChatInterface />
+                    </ErrorBoundary>
                 </div>
             </main>
 

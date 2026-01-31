@@ -31,7 +31,20 @@ class SkillExtractor:
         "python programming": "Python",
         "eda": "Exploratory Data Analysis",
         "pandas library": "pandas",
-        "numpy library": "numpy"
+        "numpy library": "numpy",
+        # Arabic Aliases
+        "برمجة": "programming",
+        "تطوير": "software development",
+        "بيانات": "data",
+        "تحليل بيانات": "data analysis",
+        "مبيعات": "sales",
+        "تسويق": "marketing",
+        "فرونت اند": "front-end",
+        "باك اند": "back-end",
+        "فول ستاك": "full-stack",
+        "سايبر سكيورتي": "cybersecurity",
+        "ويب ديزاين": "web design",
+        "جرافيك ديزاين": "graphic design"
     }
 
     def __init__(self):
@@ -55,14 +68,28 @@ class SkillExtractor:
         Apply strict skill templates for known tracks (e.g., Data Analysis).
         Ensures foundational skills are always present even if not extracted.
         """
-        # 1. Data Analysis Track
-        da_triggers = ["data analysis", "data analytics", "analysis", "analytics", "تحليل بيانات", "data analyst"]
-        is_data_analysis = any(trigger in (s.lower() for s in unmatched) for trigger in da_triggers) or \
-                           any(trigger in (unmatched) for trigger in da_triggers) or \
-                           any(trigger in (s.lower() for s in validated_skills) for trigger in da_triggers)
+        # Priority 1: Check Centralized ROLE_POLICY first (Production RAG)
+        role_policy_match = None
+        for role_key in self.data.ROLE_POLICY.keys():
+             if role_key.lower() in [u.lower() for u in unmatched] or any(role_key.lower() in s.lower() for s in validated_skills):
+                  role_policy_match = role_key
+                  break
+        
+        if role_policy_match:
+             logger.info(f"Applying Production RolePolicy for: {role_policy_match}")
+             seeds = self.suggest_skills_for_role(role_policy_match)
+             for s in seeds:
+                  if s not in validated_skills:
+                       validated_skills.append(s)
+                       skill_info = self.data.get_skill_info(s)
+                       skill_to_domain[s] = skill_info.get('domain', 'General') if skill_info else 'General'
+             return validated_skills # Role policy found, skip generic templates
 
+        # Priority 2: Legacy Track Templates (Fallback)
+        # Data Analysis Track
+        da_triggers = ["data analysis", "data analytics", "analysis", "analytics", "تحليل بيانات", "data analyst"]
+        is_data_analysis = any(trigger in (s.lower() for s in unmatched) for trigger in da_triggers)
         if is_data_analysis:
-            logger.info("Applying 'Data Analysis' Track Template - Enforcing Core Skills")
             core_da_skills = ["Microsoft Excel", "SQL", "Python", "Statistics", "Data Visualization", "Power BI"]
             for core in core_da_skills:
                 norm = self._validate_skill(core)
@@ -70,45 +97,6 @@ class SkillExtractor:
                      validated_skills.append(norm)
                      skill_to_domain[norm] = "Data Analysis"
 
-        # 2. Sales Manager Template (Priority over Soft Skills)
-        sales_triggers = ["sales manager", "مدير مبيعات", "sales lead", "head of sales", "sales director"]
-        is_sales_manager = any(trigger in (s.lower() for s in (unmatched + validated_skills)) for trigger in sales_triggers) or \
-                           any(trigger in (s.lower() for s in unmatched) for trigger in sales_triggers)
-
-        if is_sales_manager:
-            logger.info("Applying 'Sales Manager' Track Template - Enforcing 50/50 Split")
-            # Mix of Hard Sales Skills + Management
-            # Note: We prioritize skills that map to course categories like "Sales", "Business Fundamentals"
-            core_sales_skills = [
-                "Sales", "Negotiation", "CRM", "Business Development", # Sales side
-                "Leadership", "Team Management", "Strategic Planning"  # Manager side
-            ]
-            for core in core_sales_skills:
-                 norm = self._validate_skill(core)
-                 if norm and norm not in validated_skills:
-                      validated_skills.append(norm)
-                      # Force domain mapping for clean UI grouping
-                      if core in ["Sales", "Negotiation", "CRM", "Business Development"]:
-                          skill_to_domain[norm] = "Sales Strategy"
-                      else:
-                          skill_to_domain[norm] = "Management"
-            
-            # CRITICAL: Return early to prevent Soft Skills overwrite
-            return validated_skills
-
-        # 3. Soft Skills Track (Only if NO specific role matched)
-        soft_triggers = ["soft skills", "مهارات ناعمة", "communication", "تواصل", "leadership", "قيادة", "teamwork", "تعاون"]
-        is_soft_skills = any(trigger in (s.lower() for s in (unmatched + validated_skills)) for trigger in soft_triggers)
-
-        if is_soft_skills:
-            logger.info("Applying 'Soft Skills' Track Template - Enforcing Core Skills")
-            core_soft_skills = ["Communication", "Leadership", "Teamwork", "Problem Solving", "Emotional Intelligence"]
-            for core in core_soft_skills:
-                norm = self._validate_skill(core)
-                if norm and norm not in validated_skills:
-                     validated_skills.append(norm)
-                     skill_to_domain[norm] = "Soft Skills"
-            
         return validated_skills
 
     def validate_and_filter(self, semantic_result: SemanticResult) -> SkillValidationResult:
@@ -255,7 +243,12 @@ class SkillExtractor:
             'مهندس برمجيات': ['programming', 'python', 'algorithms', 'system design'],
             'مطور ويب': ['html', 'css', 'javascript', 'web development'],
             'مطور': ['programming', 'web development', 'javascript'],
+            'برمجة': ['programming', 'python', 'javascript', 'web development'],
             'محلل بيانات': ['data analysis', 'excel', 'sql', 'python', 'statistics'],
+            'فرونت اند': ['html', 'css', 'javascript', 'front-end', 'web development'],
+            'باك اند': ['python', 'sql', 'back-end', 'web development', 'programming'],
+            'فول ستاك': ['html', 'css', 'javascript', 'python', 'sql', 'full-stack', 'web development'],
+            'ويب ديزاين': ['web design', 'figma', 'ui design', 'ux design', 'html', 'css'],
             'عالم بيانات': ['machine learning', 'python', 'statistics', 'deep learning'],
             'مدير مشروع': ['project management', 'agile', 'leadership', 'communication'],
             'مدير منتج': ['product management', 'agile', 'user experience'],

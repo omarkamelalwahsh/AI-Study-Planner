@@ -25,6 +25,31 @@ class GroqClient(LLMBase):
         self.model = GROQ_MODEL
         logger.info(f"Initialized Groq client with model: {self.model}")
     
+    async def _call_with_retry(self, func, *args, **kwargs):
+        """Helper for exponential backoff retry (Requirement G) - Non-blocking."""
+        import asyncio
+        import random
+        from functools import partial
+        
+        max_retries = 3
+        base_delay = 1.0
+        
+        for attempt in range(max_retries):
+            try:
+                # Run synchronous client call in a thread to avoid blocking (Fixed V16)
+                # functools.partial is needed because to_thread takes a func and args
+                p_func = partial(func, *args, **kwargs)
+                return await asyncio.to_thread(p_func)
+            except Exception as e:
+                if attempt == max_retries - 1:
+                    logger.error(f"Groq final failure after {max_retries} attempts: {e}")
+                    raise
+                
+                # Check for rate limit or transient errors
+                delay = base_delay * (2 ** attempt) + random.uniform(0, 0.5)
+                logger.warning(f"Groq attempt {attempt+1} failed ({e}). Retrying in {delay:.2f}s...")
+                await asyncio.sleep(delay)
+
     async def generate(
         self,
         prompt: str,
@@ -34,23 +59,17 @@ class GroqClient(LLMBase):
     ) -> str:
         """Generate a text response from Groq."""
         messages = []
-        
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
-        
+        if system_prompt: messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
         
-        try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
-            return response.choices[0].message.content or ""
-        except Exception as e:
-            logger.error(f"Groq API error: {e}")
-            raise
+        response = await self._call_with_retry(
+            self.client.chat.completions.create,
+            model=self.model,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens
+        )
+        return response.choices[0].message.content or ""
     
     async def generate_json(
         self,
@@ -59,42 +78,28 @@ class GroqClient(LLMBase):
         temperature: float = 0.3,
     ) -> Dict[str, Any]:
         """Generate a JSON response from Groq."""
-        # Add JSON instruction to system prompt
-        json_system = (system_prompt or "") + "\n\nIMPORTANT: You MUST respond with valid JSON only. No markdown, no explanation, just the JSON object."
-        
+        json_system = (system_prompt or "") + "\n\nIMPORTANT: You MUST respond with valid JSON only."
         messages = [
             {"role": "system", "content": json_system},
             {"role": "user", "content": prompt}
         ]
         
         try:
-            response = self.client.chat.completions.create(
+            response = await self._call_with_retry(
+                self.client.chat.completions.create,
                 model=self.model,
                 messages=messages,
                 temperature=temperature,
                 max_tokens=1024,
-                response_format={"type": "json_object"},
+                response_format={"type": "json_object"}
             )
             
             content = response.choices[0].message.content or "{}"
-            
-            # Parse JSON
             return json.loads(content)
-            
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse JSON response: {e}")
-            # Try to extract JSON from response
-            content = response.choices[0].message.content or ""
-            json_match = re.search(r'\{.*\}', content, re.DOTALL)
-            if json_match:
-                return json.loads(json_match.group())
-            raise
         except Exception as e:
-            logger.error(f"Groq API error: {e}")
+            logger.error(f"Groq API JSON error: {e}")
             raise
-
 
 # Factory function
 def get_llm_client() -> LLMBase:
-    """Get the configured LLM client."""
     return GroqClient()

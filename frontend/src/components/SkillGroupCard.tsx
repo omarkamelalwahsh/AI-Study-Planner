@@ -1,7 +1,8 @@
 import { useState } from 'react'
 
 interface SkillItem {
-    name: string;
+    name?: string;
+    label?: string; // Backend uses label
     why?: string;
     courses_count?: number;
 }
@@ -19,15 +20,26 @@ export default function SkillGroupCard({ group, allCourses }: SkillGroupProps) {
     const [isExpanded, setIsExpanded] = useState(false)
 
     // Helper to get skill name safely
-    const getSkillName = (s: string | SkillItem) => typeof s === 'string' ? s : s.name
-    const getSkillWhy = (s: string | SkillItem) => typeof s === 'string' ? '' : s.why
+    const getSkillName = (s: string | SkillItem) => {
+        if (typeof s === 'string') return s;
+        return s.label || s.name || '';
+    }
+    const getSkillWhy = (s: string | SkillItem) => typeof s === 'string' ? '' : s.why || ''
 
-    // Filter courses relevant to this skill group (Mock logic: matches skill area name)
-    const relatedCourses = allCourses?.filter(c =>
-        c.category?.toLowerCase().includes(group.skill_area.toLowerCase()) ||
-        c.description?.toLowerCase().includes(group.skill_area.toLowerCase()) ||
-        group.skills.some(s => c.description?.toLowerCase().includes(getSkillName(s).toLowerCase()))
-    ) || []
+    // Filter courses relevant to this skill group
+    const relatedCourses = (allCourses || [])?.filter(c => {
+        const area = (group?.skill_area || "").toLowerCase();
+        const cat = (c.category || "").toLowerCase();
+        const desc = (c.description || "").toLowerCase();
+
+        const matchesArea = area !== "" && (cat.includes(area) || desc.includes(area));
+        const matchesAnySkill = group?.skills?.some(s => {
+            const sName = (getSkillName(s) || "").toLowerCase();
+            return sName !== "" && (desc.includes(sName) || (c.title || "").toLowerCase().includes(sName));
+        }) || false;
+
+        return matchesArea || matchesAnySkill;
+    }) || []
 
     return (
         <>

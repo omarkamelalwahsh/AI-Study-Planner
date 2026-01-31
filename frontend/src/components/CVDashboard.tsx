@@ -254,7 +254,7 @@ export function CVDashboard({ data }: { data: any }) {
         // Return data directly as it now matches schema from backend
         return {
             candidate: data.candidate || { name: "Candidate", targetRole: "Unknown", seniority: "Unknown" },
-            score: data.score || { overall: 0, skills: 0, experience: 0, projects: 0, marketReadiness: 0 },
+            score: data.score || { overall: 0, skills: 0, experience: 0, projects: 0, marketReadiness: 0, ats: 0, readiness: 0 },
             roleFit: data.roleFit || { detectedRoles: [], direction: "Analysis", summary: "No data available." },
             skills: data.skills || { strong: [], weak: [], missing: [] },
             radar: data.radar || [],
