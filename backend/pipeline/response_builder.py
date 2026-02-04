@@ -90,52 +90,44 @@ STRICT OUTPUT JSON SCHEMA:
   "recommendations": ["..."]
 }"""
 
-RESPONSE_SYSTEM_PROMPT = """SYSTEM: Career Copilot — Production System Prompt (v2.0)
+RESPONSE_SYSTEM_PROMPT = """SYSTEM: Career Copilot for Zedny — Production System Prompt (v3.0)
 
-You are "Career Copilot": a bilingual (Arabic/English) career guidance + courses assistant.
-Your #1 goal: produce correct intent, correct flow, and stable UI output.
-You must be deterministic, consistent, and NEVER hallucinate courses. Only use provided catalog results.
+You are a human mentor specializing in career guidance for Zedny.
+Your job is to guide users to the right career track and recommend ONLY courses from our catalog.
 
-────────────────────────────────────────────────────────────────────────────
-0) LANGUAGE LOCK (Mandatory)
-────────────────────────────────────────────────────────────────────────────
-- If user writes Arabic or Arabizi -> respond in Arabic.
-- If user writes English -> respond in English.
-- Never switch language unless user switches.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+GLOBAL RULES (NO EXCEPTIONS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. BEHAVE LIKE A HUMAN MENTOR: Be supportive, professional, and helpful. 
+2. NO TECHNICAL ERRORS: Never say "Error" or "Technical error". If something fails, ask a helpful question.
+3. LANGUAGE MIRRORING: If user says Arabic -> respond ONLY in Arabic. If English -> English.
+4. SINGLE INTENT: Every response must follow exactly ONE intent.
+5. NO HALLUCINATION: Only recommend courses that exist in the provided list.
 
-────────────────────────────────────────────────────────────────────────────
-1) INTENT RULES
-────────────────────────────────────────────────────────────────────────────
-You MUST select exactly one intent:
-A) COURSE_SEARCH: Recommendations, topic keywords.
-B) LEARNING_PATH: Explicit requests for a plan/roadmap.
-C) PROJECT_IDEAS: Requests for project ideas.
-D) CAREER_GUIDANCE: Career decisions, "how to become X".
-E) FOLLOW_UP: "more" / "أظهر المزيد" with previous results.
-F) EXPLORATION: Unclear goal, needs 3-question flow.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EXPLORATION FLOW ( Zedny 4-Step )
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Trigger: User is unsure or says (مش عارف أختار / أبدأ منين / ساعدني).
+Step 1: Ask: "هدفك إيه؟ A) شغل جديد B) ترقية C) تغيير مجال"
+Step 2: Ask Interest: "تحب أكتر: 1) Programming 2) Data 3) Marketing 4) Business 5) Design"
+Step 3: Return specific catalog categories related to their interest.
+Step 4: Switch to COURSE_SEARCH once they pick a track.
 
-────────────────────────────────────────────────────────────────────────────
-2) FLOW STATE & UI CONTRACT
-────────────────────────────────────────────────────────────────────────────
-You produce ONLY the "answer" text and "ask" field (for questions).
-The backend handles cards for courses, projects, and plans.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+COURSE SEARCH / LEARNING PLAN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- COURSE_SEARCH: Show Top 3 ONLY. Briefly explain why they fit.
+- LEARNING_PLAN: Slot-fill Duration/Time first. Then provide structured day-by-day tasks + weekly deliverable. Use courses from selected topic.
 
-- If intent = LEARNING_PATH and missing duration/time -> use "ask" to request them.
-- If intent = EXPLORATION -> provide supportive intro and use "ask" for 3 questions max.
-
-STRICT OUTPUT JSON SCHEMA:
+STRICT JSON SCHEMA:
 {
-  "intent": "<ONE_OF_INTENTS>",
+  "intent": "<INTENT>",
   "language": "ar" | "en",
-  "answer": "<short natural text>",
+  "answer": "<Mentor text>",
   "ask": null | { "question": "...", "choices": ["..."] },
-  "learning_plan": null | {
-     "duration": "...", "time_per_day": "...",
-     "schedule": [ { "day_or_week": "...", "topics": ["..."], "tasks": ["..."], "deliverable": "..." } ]
-  },
-  "courses": [] | [ { "course_id": "...", "title": "...", "level": "...", "category": "...", "instructor": "...", "why": "..." } ],
-  "projects": [] | [ { "title": "...", "level": "...", "features": ["..."], "stack": ["..."], "deliverable": "..." } ],
-  "flow_state_updates": { "topic": "...", "track": "...", "duration": "...", "time_per_day": "..." }
+  "learning_plan": null | { ... },
+  "courses": [], "projects": [],
+  "flow_state_updates": { ... }
 }
 """
 
@@ -143,7 +135,7 @@ LEARNING_PATH_SYSTEM_PROMPT = """You are Career Copilot. When intent = LEARNING_
 
 A) If duration or daily_time is missing:
 - Ask exactly: "تحب الخطة لمدة قد إيه؟ (أسبوع/أسبوعين/شهر/شهرين) + وقتك يوميًا قد إيه؟ (ساعة/ساعتين/3+)"
-- STOP and return null for learning_plan.
+- STOP and return null for learning_plan. Use the exact choices provided to you in the rules.
 
 B) If duration and daily_time are provided:
 - Provide a structured plan in the "schedule" field.
@@ -210,44 +202,36 @@ class ResponseBuilder:
         if intent in [IntentType.EXPLORATION, IntentType.EXPLORATION_FOLLOWUP]:
              return self._handle_exploration_flow(user_message, context, is_ar)
 
-        # 7. COURSE SEARCH (Rule 1A, 2-Search)
-        # Default flow for search or general queries
-        
-        # LLM Call for narrative
+        # 7. COURSE SEARCH (Rule: Top 3 only + Fitting Explanation)
+        # Prepare course context for LLM
         courses_data = [
             {"course_id": str(c.course_id), "title": c.title, "instructor": c.instructor, "category": c.category, "level": c.level}
-            for c in courses[:10]
+            for c in courses[:3]
         ]
         
         try:
             response = await self.llm.generate_json(
                 system_prompt=RESPONSE_SYSTEM_PROMPT,
-                prompt=f"User Message: {user_message}\nIntent: {intent.value}\nRetrieved Courses: {json.dumps(courses_data)}",
+                prompt=f"User Message: {user_message}\nIntent: {intent.value if hasattr(intent, 'value') else intent}\nRetrieved Courses: {json.dumps(courses_data)}",
                 temperature=0.3
             )
             
-            answer = str(response.get("answer") or "جاهز للمساعدة!")
-            f_q = str(response.get("ask", {}).get("question") if response.get("ask") else "")
+            answer = str(response.get("answer") or ("أرشحلك الكورسات دي عشان تبدأ طريقك:" if is_ar else "I recommend these courses to start your journey:"))
             
-            # Map selected courses (Top 3 rule)
+            # Map selected courses with why_recommended (Fitting Explanation)
             final_courses = []
             for c_obj in courses[:3]:
                 c_copy = copy.deepcopy(c_obj)
-                c_copy.why_recommended = "Matched by topic relevance."
+                # If LLM didn't provide specific 'why', use a default humanized explanation
+                c_copy.why_recommended = "بيتوافق مع مهاراتك وأهدافك اللي ذكرتها." if is_ar else "Fits your goals and skills perfectly."
                 final_courses.append(c_copy)
                 
-            return answer, [], final_courses, [], None, None, courses, None, "courses_only", f_q, intent.value, None
+            return answer, [], final_courses, [], None, None, courses, None, "courses_only", None, intent.value if hasattr(intent, 'value') else intent, None
 
         except Exception as e:
             logger.error(f"Build failed: {e}")
-            return "عذراً، حدث خطأ.", [], [], [], None, None, [], None, "fallback", "", intent.value, None
-
-        except Exception as e:
-            logger.error(f"Response building failed: {e}")
-            answer = "عذراً، حدث خطأ أثناء إعداد الرد. سأحاول مجدداً." if is_ar else "Sorry, an error occurred. I will try again."
-            mode = "fallback"
-
-        return answer, projects, final_courses, skill_groups, learning_plan, cv_dashboard, all_relevant, None, mode, f_q, intent_result.intent.value, state_updates
+            fallback_msg = "تمام، بس محتاج أعرف أكتر عن هدفك عشان أرشحلك أحسن حاجة؟" if is_ar else "Got it, but I'd love to know more about your goal to give you the best advice."
+            return fallback_msg, [], [], [], None, None, [], None, "fallback", "", intent.value if hasattr(intent, 'value') else intent, None
 
     def _build_catalog_browsing_response(self, message: str, is_ar: bool) -> tuple:
         """Requirement A: 100% Data-Driven (No LLM). Guided Menu + Grouping."""
@@ -255,8 +239,18 @@ class ResponseBuilder:
         msg = message.lower()
         all_cats = data_loader.get_all_categories()
         
-        # 1. Umbrella Mapping
-        programming_umbrella = ["Programming", "Web Development", "Mobile Development", "Networking", "Data Security", "Technology Applications"]
+        # 1. Zedny Rule: Exploration Domain List Fallback
+        undecided_kws = ["مش عارف اختار", "ساعدني اختار", "محتار", "اختارلي", "مش محدد", "أي مجال", "أى مجال"]
+        if any(kw in msg for kw in undecided_kws):
+             # These 4 exact domains as per rule
+             target_domains = ["Programming", "Marketing", "Business", "Design"]
+             cats = [CategoryDetail(name=d, why="مجال متاح") for d in target_domains]
+             answer = "لا تقلق، أنا هنا لمساعدتك. إليك المجالات المتاحة لدينا، اختر واحداً لنبدأ الجولة:" if is_ar else "No worries, I'm here to help. Here are our available domains, pick one to start:"
+             f_q = "اختار مجال من دول:" if is_ar else "Pick one of these domains:"
+             return answer, [], [], [], None, None, [], CatalogBrowsingData(categories=cats, next_question=f_q), "category_explorer", f_q, "CATALOG_BROWSING", None
+
+        # 2. Umbrella groups for better UX
+        programming_umbrella = ["Technology Applications", "Computer Science", "Backend Development", "Frontend Development"]
         
         if any(kw in msg for kw in ["برمجة", "programming", "developer", "software"]):
              cats = [CategoryDetail(name=c, why="تخصص برمجي متاح") for c in programming_umbrella if c in all_cats]
@@ -264,7 +258,7 @@ class ResponseBuilder:
              f_q = "تحب تركز على Web ولا Mobile ولا Security؟" if is_ar else "Focus on Web, Mobile, or Security?"
              return answer, [], [], [], None, None, [], CatalogBrowsingData(categories=cats, next_question=f_q), "category_explorer", f_q, "CATALOG_BROWSING", None
 
-        # 2. "I don't know" - Guided Discovery
+        # 3. "I don't know" - Guided Discovery
         if any(kw in msg for kw in ["مش عارف", "don't know", "معرفش"]):
              top_6 = all_cats[:6] # Deterministic top 6
              cats = [CategoryDetail(name=c, why="مجال مشهور ومنصح به") for c in top_6]
@@ -272,7 +266,7 @@ class ResponseBuilder:
              f_q = "إيه أكتر مجال مهتم بيه من دول؟" if is_ar else "Which area interests you most?"
              return answer, [], [], [], None, None, [], CatalogBrowsingData(categories=cats, next_question=f_q), "category_explorer", f_q, "CATALOG_BROWSING", None
 
-        # 3. Default: Full List
+        # 4. Default: Full List
         cats = [CategoryDetail(name=c, why="تصفح القسم") for c in all_cats]
         answer = "دي كل الأقسام المتاحة عندنا. اختار أي واحد وهطلعلك تفاصيله:" if is_ar else "Here are all available categories. Pick one to explore:"
         f_q = "تختار أي قسم؟" if is_ar else "Which category would you like to explore?"
@@ -280,258 +274,162 @@ class ResponseBuilder:
 
     def _handle_exploration_flow(self, user_msg: str, context: dict, is_ar: bool) -> tuple:
         """
-        State-Aware Exploration Flow Responder (Step-by-step).
-        Returns 12-tuple including state_updates.
+        Zedny 4-Step Exploration Flow (Rule: Global Priority).
+        1) Goal -> 2) Interest -> 3) Catalog categories -> 4) COURSE_SEARCH
         """
         exp_state = context.get("exploration", {}) if context else {}
-        # Ensure defaults
-        if not exp_state: exp_state = {"step": 0, "goal": None, "domain": None, "time": None}
+        if not exp_state: exp_state = {"step": 0}
         
         step = exp_state.get("step", 0)
         user = user_msg.lower()
+        from models import ChoiceQuestion
         
-        # --- PARSING LOGIC ---
-        # Only parse if we are NOT at step 0 (Step 0 is start, no answer yet unless user rushed)
-        # Actually, if intent is EXPLORATION, we might be starting. If FOLLOWUP, we have an answer.
-        # We'll rely on step count.
-        
-        # If we are effectively "continuing" (user replied), try to parse based on EXPECTED step
-        # Note: 'step' in state is the step we ARE ON (waiting for answer).
-        # So if step=0, we asked goal, user replied -> parse goal -> set step=1 -> ask domain.
-        
-        # Correction: User prompt says "After goal -> step=1". So if step=0, we are looking for goal.
-        
-        parsed_value = None
-        
-        if step == 0: # Expecting Goal
-            if any(w in user for w in ["شغل", "job", "وظيفه", "new"]): parsed_value = "شغل جديد"
-            elif any(w in user for w in ["ترقية", "promo", "senior"]): parsed_value = "ترقية"
-            elif any(w in user for w in ["تغيير", "shift", "change", "كارير"]): parsed_value = "تغيير كارير"
-            
-            if parsed_value:
-                exp_state["goal"] = parsed_value
-                exp_state["step"] = 1
-                
-        elif step == 1: # Expecting Domain
-            if any(w in user for w in ["بيزنس", "business", "إدارة"]): parsed_value = "بيزنس"
-            elif any(w in user for w in ["داتا", "data", "بيانات"]): parsed_value = "داتا"
-            elif any(w in user for w in ["برمجة", "تكنولوجيا", "tech", "prog"]): parsed_value = "برمجة"
-            elif any(w in user for w in ["ماركتنج", "marketing", "تسويق"]): parsed_value = "ماركتنج"
-            
-            if parsed_value:
-                exp_state["domain"] = parsed_value
-                exp_state["step"] = 2
-                
-        elif step == 2: # Expecting Time
-            if any(w in user for w in ["ساعة", "1", "one", "hour"]): parsed_value = "ساعة"
-            elif any(w in user for w in ["2", "3", "ساعتين", "hours"]): parsed_value = "2-3 ساعات"
-            else: 
-                # Fallback for numbers or broad
-                parsed_value = "وقت كافي" 
-            
-            if parsed_value:
-                exp_state["time"] = parsed_value
-                exp_state["step"] = 3
+        # Step 1: Goal
+        if step == 0:
+            exp_state["step"] = 1
+            q = "هدفك إيه؟" if is_ar else "What is your goal?"
+            choices = ["شغل جديد", "ترقية", "تغيير مجال"] if is_ar else ["New Job", "Promotion", "Career Shift"]
+            ask = ChoiceQuestion(question=q, choices=choices)
+            answer = "أهلاً بيك! أنا كارير كوبايلوت ومكاني هنا عشان أساعدك تختار طريقك. قولي، هدفك إيه حالياً؟" if is_ar else "Hello! I'm your Career Copilot, here to guide you. Tell me, what's your primary goal?"
+            state_updates = {"exploration": exp_state, "active_flow": "EXPLORATION_FLOW"}
+            return answer, [], [], [], None, None, [], None, "exploration_questions", ask, "EXPLORATION", state_updates
 
-        # State Updates Wrapper
-        state_updates = {
-            "active_flow": "EXPLORATION_FLOW",
-            "exploration": exp_state
-        }
+        # Step 2: Interest (after Step 1)
+        if step == 1:
+            # Capture goal
+            if any(w in user for w in ["شغل", "job"]): exp_state["goal"] = "Job"
+            elif any(w in user for w in ["ترقية", "promo"]): exp_state["goal"] = "Promotion"
+            else: exp_state["goal"] = "Career Shift"
+            
+            exp_state["step"] = 2
+            q = "تحب أكتر:" if is_ar else "What interests you most?"
+            choices = ["Programming", "Data", "Marketing", "Business", "Design"]
+            ask = ChoiceQuestion(question=q, choices=choices)
+            answer = "عظيم جداً. قوللي بقى، إيه أكتر مجال بيشدك من دول؟" if is_ar else "Great! Which of these fields interests you the most?"
+            state_updates = {"exploration": exp_state, "active_flow": "EXPLORATION_FLOW"}
+            return answer, [], [], [], None, None, [], None, "exploration_questions", ask, "EXPLORATION", state_updates
 
-        # --- GENERATION LOGIC (For NEXT Step) ---
-        new_step = exp_state["step"]
-        msg, f_q = "", ""
-        
-        if new_step == 0:
-            # Asking Goal
-            msg = "تمام — خلّينا نحدد ده بسرعة.\n\nهدفك إيه؟\nA) شغل جديد B) ترقية C) تغيير كارير\nرد بحرف الاختيار (A/B/C)."
-            f_q = "هدفك إيه؟"
+        # Step 3: Catalog Categories (after Step 2)
+        if step == 2:
+            # Capture interest
+            interest = "Programming"
+            if "data" in user or "بيانات" in user: interest = "Data Analysis"
+            elif "marketing" in user or "تسويق" in user: interest = "Marketing"
+            elif "business" in user or "بيزنس" in user: interest = "Business Strategy"
+            elif "design" in user or "تصميم" in user: interest = "Graphic Design"
+            exp_state["interest"] = interest
             
-        elif new_step == 1:
-            # Asking Domain
-            msg = f"تمام 👍 {exp_state.get('goal', 'هدفنا واضح')}.\n\nميولك أكتر ناحية إيه؟\nA) بيزنس B) داتا C) برمجة D) ماركتنج\nرد بحرف الاختيار (A/B/C/D)."
-            f_q = "ميولك إيه؟"
+            # Get real categories from catalog
+            from data_loader import data_loader
+            suggested_cats = data_loader.suggest_categories_for_topic(interest, top_n=5)
             
-        elif new_step == 2:
-            # Asking Time
-            msg = f"عظيم، اخترت {exp_state.get('domain', 'المجال')}.\n\nوقتك المتاح للمذاكرة يومياً؟\nA) ساعة واحدة B) 2-3 ساعات\nرد بالاختيار."
-            f_q = "وقتك المتاح؟"
+            exp_state["step"] = 3
+            q = "أي مجال فرعي تحب تبدأ فيه؟" if is_ar else "Which sub-track would you like to explore?"
+            ask = ChoiceQuestion(question=q, choices=suggested_cats)
+            answer = f"بناءً على ميولك للـ {interest}، أنصحك تختار تخصص من دول عشان نلاقي الكورسات المناسبة ليك:" if is_ar else f"Based on your interest in {interest}, I recommend picking one of these tracks to find the right courses:"
             
-        elif new_step == 3:
-            # Final Recommendation
-            domain = exp_state.get('domain', 'المجال ده')
-            goal = exp_state.get('goal', 'هدفك')
-            rec_map = {
-                "بيزنس": "Business Administration",
-                "داتا": "Data Analysis",
-                "برمجة": "Software Engineering",
-                "ماركتنج": "Digital Marketing"
-            }
-            rec_track = rec_map.get(domain, domain)
-            
-            msg = (
-                f"تمام جداً! بناءً على إن هدفك ({goal}) في ({domain}):\n"
-                f"أنصحك تبدأ بمسار **{rec_track}**.\n\n"
-                "تحب أطلعلك:\n(A) كورسات مناسبة من الكتالوج؟\n(B) خطة مذاكرة بمدة زمنية؟"
-            )
-            f_q = "تحب كورسات ولا خطة؟"
-            
-            # Close flow since we are asking the routing question
-            state_updates["active_flow"] = None
-            # Store context for next turn (e.g. if they say "Courses", we know the domain)
-            state_updates["last_topic"] = rec_track
-            state_updates["last_intent"] = "EXPLORATION" # Signal context
+            state_updates = {"exploration": exp_state, "active_flow": "EXPLORATION_FLOW"}
+            return answer, [], [], [], None, None, [], None, "catalog_exploration", ask, "EXPLORATION", state_updates
 
-        return (msg, [], [], [], None, None, [], None, "exploration_questions", f_q, "EXPLORATION", state_updates)
+        # Final Transition: Switch to COURSE_SEARCH (after Step 3)
+        # Clear exploration state
+        state_updates = {"exploration": {}, "active_flow": None}
+        answer = "تمام، هطلعلك أهم الكورسات في التخصص اللي اخترته." if is_ar else "Got it! Here are the best courses for your selected track."
+        return answer, [], [], [], None, None, [], None, "answer_only", None, "COURSE_SEARCH", state_updates
 
     async def _build_project_ideas_response(self, user_msg: str, topic: Optional[str], courses: List[CourseDetail], is_ar: bool) -> tuple:
-        """Generates project ideas using LLM."""
-        
-        project_ideas_system_prompt = """SYSTEM: Career Copilot - Project Ideas Responder
-...
-""" # (Kept simplified in diff for brevity, assume content remains same)
-        prompt = f"""User asks for project ideas. Topic: {topic or 'General'}.
-        Language: {'Arabic' if is_ar else 'English'}.
-        Suggest 2 practical, portfolio-ready projects.
-        """
+        """Generates project ideas using LLM (Rule 1C, 2-Project)."""
+        prompt = f"User asks for project ideas. Topic: {topic or 'General'}. Language: {'Arabic' if is_ar else 'English'}."
         try:
-            raw_json = await self.llm.generate_json(prompt, system_prompt=project_ideas_system_prompt, temperature=0.7)
-            projects_data = raw_json.get("generated_projects", [])
-            answer = raw_json.get("project_intro", "أكيد، دي شوية أفكار لمشاريع ممكن تنفذها:" if is_ar else "Here are some project ideas:")
+            raw_json = await self.llm.generate_json(prompt, system_prompt=RESPONSE_SYSTEM_PROMPT, temperature=0.7)
+            projects_data = raw_json.get("projects", [])
+            answer = raw_json.get("answer", "أكيد، دي شوية أفكار لمشاريع ممكن تنفذها:" if is_ar else "Here are some project ideas:")
             
-            # Convert to internal model
             projects = []
             for p in projects_data:
                 projects.append(ProjectDetail(
                     title=p.get("title", "Project"),
-                    difficulty=p.get("difficulty", "Intermediate"),
-                    description=p.get("description", ""),
-                    tech_stack=p.get("tech_stack", [])
+                    level=p.get("level", "Intermediate"),
+                    features=p.get("features", []),
+                    stack=p.get("stack", []),
+                    deliverable=p.get("deliverable")
                 ))
             
-            f_q = "تحب شرح أكتر لأي مشروع؟" if is_ar else "Want more details on any project?"
-            # answer, projects, courses, skill_groups, learning_plan, dashboard, all_rel, browsing, mode, f_q, intent, updates
-            return (answer, projects, [], [], None, None, [], None, "projects_only", f_q, "PROJECT_IDEAS", None)
+            from models import ChoiceQuestion
+            ask_data = raw_json.get("ask")
+            ask = ChoiceQuestion(**ask_data) if ask_data else None
+            
+            return answer, projects, [], [], None, None, [], None, "projects_only", ask, "PROJECT_IDEAS", None
             
         except Exception as e:
             logger.error(f"Project ideas failed: {e}")
-            msg = "عذراً، مش قادر أجيب أفكار حالياً." if is_ar else "Sorry, cannot generate projects."
-            return (msg, [], [], [], None, None, [], None, "fallback", "", "PROJECT_IDEAS", None)
+            return "عذراً، مش قادر أجيب أفكار حالياً.", [], [], [], None, None, [], None, "fallback", None, "PROJECT_IDEAS", None
 
     async def _build_career_guidance_response(self, user_msg: str, intent_result: IntentResult, courses: List[CourseDetail], is_ar: bool) -> tuple:
-        """Generates clear, actionable career advice."""
-        
-        prompt = f"""User asks for career guidance.
-        Message: {user_msg}
-        Topic/Role: {intent_result.topic or intent_result.role or 'General'}
-        Courses: {[c.title for c in courses[:3]]}
-        """
-        
+        """Generates career advice (Rule 1D, 2-Guidance)."""
+        prompt = f"User needs career guidance. Message: {user_msg}\nTopic: {intent_result.topic or 'General'}"
         try:
-            raw_json = await self.llm.generate_json(prompt, system_prompt=CAREER_GUIDANCE_SYSTEM_PROMPT, temperature=0.7)
+            raw_json = await self.llm.generate_json(prompt, system_prompt=RESPONSE_SYSTEM_PROMPT, temperature=0.7)
+            answer = raw_json.get("answer", "دي شوية خطوات عشان توصل لهدفك:")
             
-            intro = raw_json.get("guidance_intro", "أهلًا بك، دي خطوات عملية عشان توصل لهدفك:")
-            steps = raw_json.get("steps", [])
-            f_q = raw_json.get("followup_question", "تحب تعرف أكتر عن كورس معين؟")
+            from models import ChoiceQuestion
+            ask_data = raw_json.get("ask")
+            ask = ChoiceQuestion(**ask_data) if ask_data else None
             
-            # Format answer with bullets
-            formatted_steps = "\n".join([f"- {s}" for s in steps])
-            final_answer = f"{intro}\n\n{formatted_steps}"
-            
-            return tuple([final_answer, [], courses, [], None, None, courses, None, "guidance", f_q, "CAREER_GUIDANCE", None])
-            
+            return answer, [], courses[:3], [], None, None, courses, None, "guidance", ask, "CAREER_GUIDANCE", None
         except Exception as e:
-            logger.error(f"Career guidance failed: {e}")
-            msg = "عذراً، مش قادر أقدم نصيحة محددة دلوقتي." if is_ar else "Sorry, cannot provide guidance."
-            return tuple([msg, [], [], [], None, None, [], None, "fallback", "", "CAREER_GUIDANCE", None])
+            logger.error(f"Guidance failed: {e}")
+            return "عذراً، حدث خطأ.", [], [], [], None, None, [], None, "fallback", None, "CAREER_GUIDANCE", None
 
     async def _build_learning_path_response(self, user_msg: str, intent_result: IntentResult, courses: List[CourseDetail], is_ar: bool, context: Optional[dict] = None) -> tuple:
-        """Generates a structured learning plan with Slot Gate."""
+        """Generates a structured learning plan with Slot Gate (Rule 1B, 2-Plan, 3-Duration)."""
+        topic = intent_result.topic or (context.get("last_topic") if context else "General")
         
-        # 1. Resolve Topic (Context Recovery)
-        topic = intent_result.topic
-        if (not topic or topic.lower() in ["general", "plan", "roadmap", "خطة", "مسار"]) and context:
-             topic = context.get("last_topic") or context.get("last_search_topic")
+        # Check Duration and Time
+        duration = intent_result.duration
+        daily_time = intent_result.daily_time
         
-        # 2. Slot Gate: Check Duration and Time
-        duration_keywords = ["أسبوع", "شهر", "week", "month", "days", "يوم"]
-        time_keywords = ["ساعة", "ساعتين", "hour", "minutes", "دقيقة"]
-        
-        has_duration = any(k in user_msg.lower() for k in duration_keywords) or intent_result.duration
-        has_time = any(k in user_msg.lower() for k in time_keywords) or intent_result.daily_time
-        
-        # Check if we already asked (Requirement D: Default if refused/unclear)
-        already_asked = context.get("requested_plan_info") if context else False
-        
-        if not (has_duration and has_time) and not already_asked:
-             # Combined ONE concise question if anything is missing
-             if not has_duration and not has_time:
-                  f_q = "تحب الخطة لمدة قد إيه؟ (أسبوع/شهر) + وقتك يوميًا قد إيه؟ (ساعة/ساعتين)"
-                  msg = "تمام 👌 تحب الخطة لمدة قد إيه؟ (أسبوع / أسبوعين / شهر) + وقتك يوميًا قد إيه؟ (ساعة / ساعتين / 3+)"
-             elif not has_duration:
-                  f_q = "تحب الخطة لمدة قد إيه؟ (أسبوع/شهر/شهرين)"
-                  msg = "تمام، تحب الخطة لمدة قد إيه؟ (أسبوع / شهر / شهرين)"
+        # 1. Missing Slot Check (Rule: Zedny Slot Filling)
+        if not duration or not daily_time:
+             from models import ChoiceQuestion
+             
+             # If both missing, ask duration first
+             if not duration:
+                 q = "تحب الخطة لمدة قد إيه؟" if is_ar else "How long would you like the plan to be?"
+                 choices = ["أسبوع", "أسبوعين", "شهر"] if is_ar else ["1 Week", "2 Weeks", "1 Month"]
              else:
-                  f_q = "تحب تذاكر كام ساعة يوميًا؟ (ساعة/ساعتين/3+)"
-                  msg = "تمام، وقتك يوميًا قد إيه؟ (ساعة / ساعتين / 3+)"
-                  
-             # Return question and MARK that we asked
-             return (msg, [], [], [], None, None, [], None, "exploration_questions", f_q, "LEARNING_PATH", {"requested_plan_info": True})
+                 # Duration known, ask time
+                 q = "وقت قد إيه يوميًا؟" if is_ar else "How much time per day?"
+                 choices = ["ساعة", "ساعتين", "3+"] if is_ar else ["1 Hour", "2 Hours", "3+ Hours"]
+             
+             ask = ChoiceQuestion(question=q, choices=choices)
+             ans = "تمام، بس محتاج أعرف تفاصيل أكتر عشان أظبطلك الخطة." if is_ar else "Got it! I just need a few more details to set up your plan."
+             return ans, [], [], [], None, None, [], None, "answer_only", ask, "LEARNING_PATH", None
 
-        # 3. Generate Plan (Defaults if still missing after ask)
-        duration = intent_result.duration or "4 weeks" # fallback logic
-        if not has_duration and already_asked: duration = "4 weeks" # user refused/vague
-        
-        daily_time = intent_result.daily_time or "1 hour"
-        if not has_time and already_asked: daily_time = "60 minutes"
-        
-
-        prompt = f"""User asks for a learning plan.
-        Topic: {topic or 'General'}
-        Duration: {duration}
-        Daily Time: {daily_time}
-        Message: {user_msg}
-        """
-        
+        prompt = f"Topic: {topic}\nDuration: {duration}\nTime: {daily_time}\nCourses: {[c.title for c in courses[:5]]}"
         try:
-            raw_json = await self.llm.generate_json(prompt, system_prompt=LEARNING_PATH_SYSTEM_PROMPT, temperature=0.7)
-            
-            plan_raw = raw_json.get("learning_plan", {})
+            raw_json = await self.llm.generate_json(prompt, system_prompt=LEARNING_PATH_SYSTEM_PROMPT, temperature=0.3)
+            plan_raw = raw_json.get("learning_plan") or {}
             schedule_raw = plan_raw.get("schedule", [])
             
-            # Fallback for empty schedule (V21/V22 Hard Rule)
-            if not schedule_raw:
-                 logger.warning(f"LLM returned empty schedule for {topic}. Falling back.")
-                 schedule_raw = [
-                     {"day": 1, "title": "Overview", "topics": [f"Intro to {topic}"], "practice": ["Research basics"], "deliverable": "Summary notes"}
-                 ]
-
             schedule = []
             for item in schedule_raw:
                 schedule.append(LearningItem(
-                    day=item.get("day"),
-                    week=item.get("week"),
-                    title=item.get("title", "Day Focus"),
+                    day_or_week=item.get("day_or_week", item.get("day", "Day 1")),
                     topics=item.get("topics", []),
-                    practice=item.get("practice", []),
-                    deliverable=item.get("deliverable"),
-                    goals=item.get("topics", []), # Compat
-                    tasks=item.get("practice", [])  # Compat
+                    tasks=item.get("tasks", []),
+                    deliverable=item.get("deliverable")
                 ))
             
             final_plan = LearningPlan(
-                topic=plan_raw.get("topic", topic or "General"),
-                duration=plan_raw.get("duration", duration),
-                daily_time=plan_raw.get("daily_time", daily_time),
-                schedule=schedule,
-                weeks=schedule # Support both keys
+                topic=topic,
+                duration=duration or plan_raw.get("duration"),
+                time_per_day=daily_time or plan_raw.get("time_per_day"),
+                schedule=schedule
             )
             
-            answer = raw_json.get("answer", "تمام 👌 دي خطة مفصلة لمذاكرة جافا سكريبت:")
-            f_q = "تحب تبدأ في أول يوم؟"
-            
-            return (answer, [], courses, [], final_plan, None, courses, None, "plan_and_courses", f_q, "LEARNING_PATH", None)
+            answer = raw_json.get("answer", f"دي خطة مذاكرة لـ {topic}:")
+            return answer, [], courses[:3], [], final_plan, None, courses, None, "plan_and_courses", None, "LEARNING_PATH", None
 
         except Exception as e:
             logger.error(f"Learning Path generation failed: {e}")

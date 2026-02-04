@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from config import API_HOST, API_PORT, LOG_LEVEL
-from models import ChatRequest, ChatResponse, CourseDetail, ErrorDetail, IntentType, IntentResult, StandardResponse
+from models import ChatRequest, ChatResponse, CourseDetail, ErrorDetail, IntentType, IntentResult, ChoiceQuestion, FlowStateUpdates
 from data_loader import data_loader
 from llm.groq_gateway import get_llm_gateway
 from memory import conversation_memory
@@ -266,7 +266,6 @@ async def upload_cv(
         return ChatResponse(
             session_id=session_id,
             intent=IntentType.CV_ANALYSIS,
-            mode=mode,
             answer=answer,
             courses=selected_courses,
             all_relevant_courses=all_relevant,
@@ -277,7 +276,8 @@ async def upload_cv(
             dashboard=dashboard,
             error=None,
             request_id=request_id,
-            followup_question=f_question
+            ask=f_question if isinstance(f_question, ChoiceQuestion) else None,
+            followup_question=f_question if isinstance(f_question, str) else None
         )
 
     except Exception as e:
@@ -285,11 +285,10 @@ async def upload_cv(
         return ChatResponse(
              session_id=session_id,
              intent=IntentType.CV_ANALYSIS,
-             mode="chat",
-             answer="عذراً، حدث خطأ أثناء معالجة ملف السيرة الذاتية. يرجى المحاولة مرة أخرى بملف مختلف.",
+             answer="تمام، بس ملف السيرة الذاتية محتاج يتراجع تاني. ممكن تحاول ترفعه بصيغة تانية أو تسألني في أي مجال تحب تبدأ فيه؟" if data_loader.is_arabic(request.message) else "Got it, but the CV file might need a quick check. Could you try uploading it in a different format, or just tell me which field you're interested in?",
              courses=[],
              request_id=request_id,
-             error={"message": str(e)}
+             error=ErrorDetail(message=str(e), code="CV_PROCESSING_ERROR")
         )
 
 
@@ -338,11 +337,18 @@ async def run_course_search_pipeline(
 
     # --- RULE 4A: SQL/Database Topic Expansion ---
     db_keywords = ["sql", "database", "databases", "mysql", "postgres", "postgresql", "db", "قواعد بيانات", "داتابيز", "my sql", "بوستجريس"]
+    expanded_courses = []
     if intent_result.topic and any(kw in intent_result.topic.lower() for kw in db_keywords):
         logger.info(f"[{request_id}] RULE 4A Triggered: Forcing Database track expansion.")
-        intent_result.search_axes.append("Databases")
-        # Ensure category filter includes Databases if we have a way to force it in retriever
-        # For now, we'll ensure the topic is used.
+        sql_results = retriever.retrieve_by_title("SQL")
+        db_results = retriever.retrieve_by_title("Database")
+        # Ensure categories like Data Security are checked if relevant
+        sec_results = retriever.browse_by_category("Data Security")
+        seen_ids = set()
+        for c in sql_results[:5] + db_results[:5] + sec_results[:2]:
+            if c.course_id not in seen_ids:
+                expanded_courses.append(c)
+                seen_ids.add(c.course_id)
 
     # --- RULE 4B: Sales Manager Hybrid Retrieval ---
     manager_keywords = ["مدير", "إدارة", "قيادة", "ليدر", "lead", "manager", "leadership"]
@@ -354,15 +360,14 @@ async def run_course_search_pipeline(
     hybrid_courses = []
     if is_manager and is_sales:
         logger.info(f"[{request_id}] RULE 4B Triggered: Hybrid Sales + Management retrieval.")
-        sales_results = retriever.retrieve_by_category("Sales")
-        mgmt_results = retriever.retrieve_by_category("Leadership & Management")
-        # Merge and dedup
+        sales_results = retriever.browse_by_category("Sales")
+        mgmt_results = retriever.browse_by_category("Leadership & Management")
+        biz_results = retriever.browse_by_category("Business Fundamentals")
         seen_ids = set()
-        for c in sales_results + mgmt_results:
+        for c in sales_results[:4] + mgmt_results[:4] + biz_results[:2]:
             if c.course_id not in seen_ids:
                 hybrid_courses.append(c)
                 seen_ids.add(c.course_id)
-        # We'll use these hybrid courses if standard retrieval is weak or instead of it
 
     # 4.1 Skill-based
     raw_courses = retriever.retrieve(
@@ -372,10 +377,11 @@ async def run_course_search_pipeline(
         tool=semantic_result.tool,
     )
     
-    # Merge hybrid results if applicable
-    if hybrid_courses:
-        # Prioritize hybrid results or merge with skill-based
-        raw_courses = hybrid_courses + [c for c in raw_courses if c.course_id not in [h.course_id for h in hybrid_courses]]
+    # Merge specialized results
+    specialized = hybrid_courses or expanded_courses
+    if specialized:
+        # Prioritize specialized results
+        raw_courses = specialized + [c for c in raw_courses if c.course_id not in [s.course_id for s in specialized]]
     
     # 4.2 Fallbacks (Topic/Title)
     # Apply fallbacks for any intent that needs courses (not just COURSE_SEARCH)
@@ -507,6 +513,23 @@ async def chat(request: ChatRequest):
     try:
         # Step 1: Intent Router (Rock-Solid Interface)
         intent_result = await intent_router.route(request.message, session_state)
+        
+        # --- EXPLORATION LOCK & FALLBACK RULES (Zedny Production) ---
+        try:
+            active_f = session_state.get("active_flow")
+            if active_f == "EXPLORATION_FLOW":
+                # Rule: Exploraton Domain List Fallback
+                undecided_kws = ["مش عارف اختار", "ساعدني اختار", "محتار", "اختارلي", "مش محدد", "أي مجال", "أى مجال"]
+                if any(kw in request.message for kw in undecided_kws):
+                    logger.info(f"[{request_id}] EXPLORATION FALLBACK triggered: Undecided user. Forcing CATALOG_BROWSING")
+                    intent_result = intent_result.model_copy(update={"intent": IntentType.CATALOG_BROWSING})
+                else:
+                    # Rule: Exploration Lock
+                    logger.info(f"[{request_id}] EXPLORATION LOCK triggered. Forcing intent from {intent_result.intent.value} to EXPLORATION_FOLLOWUP")
+                    intent_result = intent_result.model_copy(update={"intent": IntentType.EXPLORATION_FOLLOWUP})
+        except Exception as lock_err:
+            logger.error(f"[{request_id}] EXPLORATION RULE ERROR: {lock_err}")
+            
         logger.info(f"[{request_id}] Intent: {intent_result.intent.value} (Conf: {intent_result.confidence})")
         
         # Check for ambiguous intent -> Catalog Browsing Fast Path
@@ -534,9 +557,7 @@ async def chat(request: ChatRequest):
             return ChatResponse(
                 session_id=session_id,
                 intent=IntentType.CATALOG_BROWSING,
-                mode="category_explorer",
                 answer=answer,
-                confidence=1.0,
                 courses=[],
                 projects=[],
                 skill_groups=[],
@@ -545,7 +566,8 @@ async def chat(request: ChatRequest):
                 dashboard=None,
                 error=None,
                 request_id=request_id,
-                followup_question="تحب تختار قسم منهم ولا تحب أساعدك تختار على حسب هدفك؟"
+                ask=ChoiceQuestion(question="تحب تختار قسم منهم ولا تحب أساعدك تختار على حسب هدفك؟", choices=[c.name for c in cat_details]),
+                followup_question=None
             )
 
         # --- V17 RULE 3: Disambiguation Resolution ---
@@ -603,9 +625,9 @@ async def chat(request: ChatRequest):
                 projects=[],
                 skill_groups=[],
                 learning_plan=None,
-                mode=mode,
                 request_id=request_id,
-                followup_question=f_q,
+                ask=f_q if isinstance(f_q, ChoiceQuestion) else None,
+                followup_question=f_q if isinstance(f_q, str) else None,
                 meta={"flow": "exploration_v2"}
              )
 
@@ -662,14 +684,14 @@ async def chat(request: ChatRequest):
             conversation_memory.add_assistant_message(session_id, answer, intent=IntentType.COURSE_SEARCH.value, state_updates=state_updates)
             return ChatResponse(
                 session_id=session_id,
-                intent=IntentType.COURSE_SEARCH, # Include normalization rules
+                intent=IntentType.COURSE_SEARCH,
                 answer=answer,
                 courses=selected,
                 all_relevant_courses=all_rel,
                 skill_groups=skills,
-                mode="courses_only",
                 request_id=request_id,
-                followup_question=f_q,
+                ask=f_q if isinstance(f_q, ChoiceQuestion) else None,
+                followup_question=f_q if isinstance(f_q, str) else None,
                 meta=meta
             )
 
@@ -886,30 +908,56 @@ async def chat(request: ChatRequest):
             "error": None
         }
 
+        # Language Lock (Rule 0)
+        is_ar = data_loader.is_arabic(request.message)
+        lang = "ar" if is_ar else "en"
+
+        # Map f_question to ask (Rule 7)
+        ask_obj = None
+        if isinstance(f_question, ChoiceQuestion):
+            ask_obj = f_question
+        elif isinstance(f_question, str) and f_question:
+            ask_obj = ChoiceQuestion(question=f_question, choices=[])
+
+        # Map flow_state_updates (Rule 2 & 7)
+        fsu = None
+        if flow_state_updates:
+            fsu = FlowStateUpdates(
+                active_flow=flow_state_updates.get("active_flow"),
+                topic=flow_state_updates.get("topic") or flow_state_updates.get("last_topic") or flow_state_updates.get("exploration", {}).get("domain"),
+                track=flow_state_updates.get("track") or flow_state_updates.get("last_role"),
+                duration=flow_state_updates.get("duration") or flow_state_updates.get("exploration", {}).get("time"),
+                time_per_day=flow_state_updates.get("time_per_day") or flow_state_updates.get("exploration", {}).get("time_per_day"),
+                exploration=flow_state_updates.get("exploration")
+            )
+
         return ChatResponse(
             session_id=session_id,
+            request_id=request_id,
             intent=response_intent,
-            mode=mode,
+            language=lang,
             answer=answer,
+            ask=ask_obj,
             courses=selected_courses,
-            all_relevant_courses=all_rel,
             projects=projects,
+            learning_plan=learning_plan,
+            flow_state_updates=fsu,
+            all_relevant_courses=all_rel,
             skill_groups=skill_groups,
             catalog_browsing=catalog_browsing,
-            learning_plan=learning_plan,
             dashboard=dashboard,
-            meta=meta,
-            error=None,
-            request_id=request_id,
-            followup_question=f_question
+            meta=meta
         )
 
     except Exception as e:
         logger.error(f"[{request_id}] Pipeline Error: {e}", exc_info=True)
+        # Zedny Rule: Never say "Technical Error"
+        answer = "تمام، بس محتاج أعرف أكتر عن هدفك حالياً عشان أقدر أساعدك؟" if data_loader.is_arabic(request.message) else "Got it, but could you tell me a bit more about your goal so I can guide you better?"
+        
         return ChatResponse(
             session_id=session_id,
             intent=IntentType.GENERAL_QA,
-            answer="عذراً، حدث خطأ تقني بسيط. ممكن تحاول تاني؟",
+            answer=answer,
             courses=[],
             error=ErrorDetail(message=str(e), code="PIPELINE_ERROR"),
             request_id=request_id
