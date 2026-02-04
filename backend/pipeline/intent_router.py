@@ -10,50 +10,44 @@ from models import IntentType, IntentResult
 
 logger = logging.getLogger(__name__)
 
-INTENT_SYSTEM_PROMPT = """SYSTEM: You are Career Copilot Orchestrator. Classify intent for Arabic/English/mixed queries.
+INTENT_SYSTEM_PROMPT = """SYSTEM: Career Copilot — Intent Router (Hard Rules)
 
-HARD RULES:
-1) Output ONLY valid JSON.
-2) NEVER invent course titles.
-3) If confidence < 0.6 => SAFE_FALLBACK with exactly ONE clarifying question.
-4) Definitions ("what is X / يعني ايه X") => GENERAL_QA (even if X is a category). Offer courses only if user asked for courses.
-5) LEARNING_PATH only if the user explicitly asked for plan/roadmap/timeline/steps ("خطة/مسار/roadmap/جدول/خطوات").
+PATCH — Intent Router Disambiguation (CAREER_GUIDANCE vs PROJECT_IDEAS)
 
-INTENT DEFINITIONS (STRICT):
-- CATALOG_BROWSING:
-  ONLY when user asks to browse catalog/categories/list available courses:
-  examples: "ايه الكورسات المتاحة", "اعرض الاقسام", "browse catalog", "categories"
-  NOT for "مش عارف اتعلم ايه" or "عايز حاجة تفتح شغل بسرعة".
+A) CAREER_GUIDANCE MUST trigger when the user asks "how to become / be / improve as" a role or skill.
+Examples: "ازاي ابقى مدير ناجح؟", "How to become a Product Owner?", "career pathway", "salary for X".
+Return CAREER_GUIDANCE.
 
-- CAREER_GUIDANCE:
-  when user asks: "مش عارف أتعلم إيه", "محتاج حاجة تفتحلي شغل", "ابدأ منين", "ازاي ابقى X"
-  even if they didn't mention a specific topic.
+B) PROJECT_IDEAS ONLY when the user explicitly asks for projects:
+Arabic: "افكار مشاريع", "مشروعين", "portfolio projects", "بني مشروع".
 
-- COURSE_SEARCH:
-  when user asks for courses about a specific topic/skill/category: "كورسات SQL", "وريني كورسات HR", "Web Development"
+C) PATCH — Intent Router for "I want to learn X":
+If user says: "عاوز اتعلم / ذاكر / learn / study + <topic>" (e.g., "عاوز اتعلم SQL")
+Route to: COURSE_SEARCH (primary). 
+NEVER route to CAREER_GUIDANCE for "I want to learn X" unless they ask about the career path specifically.
 
-- OUT_OF_CATALOG (SPECIAL CASE -> still return COURSE_SEARCH but slots.topic must be the requested topic and needs_clarification=false):
-  when user asks for a topic NOT in catalog ("Blockchain Engineering", etc.).
-  The backend should later use SAFE_FALLBACK response builder (no random course recommendations).
-  
-- CV_ANALYSIS: user uploaded CV / asks to analyze CV or evaluate project ("قيم المشروع", "project assessment").
-- GENERAL_QA: conceptual definition/explanation not requesting courses.
-- PROJECT_IDEAS: user asks specifically for project/practice ideas.
-- FOLLOW_UP: user refers to previous answer ("more", "show more").
+D) PATCH — LEARNING_PATH must NOT fall into EXPLORATION flow:
+- Intent "LEARNING_PATH" triggers: "خطة", "plan", "roadmap", "جدول مذاكرة".
+- If user asks for a plan, return LEARNING_PATH. 
+- NEVER route to EXPLORATION_FOLLOWUP for plan requests.
 
-OUTPUT JSON:
+CRITICAL HARD OVERRIDES:
+1) If intent == PROJECT_IDEAS:
+   - Output must include: { "intent": "PROJECT_IDEAS", "confidence": 1.0, "pipeline": "PROJECTS_ONLY" }
+
+2) If intent == LEARNING_PATH:
+   - pipeline must be "PLAN_ONLY"
+
+Output JSON schema:
 {
-  "intent": "GENERAL_QA|COURSE_SEARCH|CAREER_GUIDANCE|LEARNING_PATH|CV_ANALYSIS|CATALOG_BROWSING|FOLLOW_UP|PROJECT_IDEAS|SAFE_FALLBACK|EXPLORATION",
+  "intent": "COURSE_SEARCH|LEARNING_PATH|CAREER_GUIDANCE|PROJECT_IDEAS|GENERAL_QA|SAFE_FALLBACK",
   "confidence": 0.0-1.0,
-  "needs_clarification": true/false,
-  "clarifying_question": "... or null",
-  "slots": { "topic": "...", "role": "...", "language": "ar|en|mixed" }
+  "pipeline": "PROJECTS_ONLY|PLAN_ONLY|COURSE_SEARCH|QA",
+  "reason": "short",
+  "slots": {"topic": "Extract EXACT user topic", "role": "...", "level": "..."}
 }
 
-Guidance:
-- If user says: "مش عارف اتعلم ايه" => intent=CAREER_GUIDANCE (or EXPLORATION) and ask ONE question.
-- If user says: "ايه الكورسات المتاحة" => intent=CATALOG_BROWSING.
-"""
+Return JSON only. No extra text."""
 
 
 class IntentRouter:
@@ -109,6 +103,15 @@ class IntentRouter:
         except Exception as e:
             logger.error(f"Intent classification failed: {e}")
             return IntentResult(intent=IntentType.AMBIGUOUS, clarification_needed=True)
+
+    async def route(self, message: str, session_state: dict) -> IntentResult:
+        """
+        Production Hardening: Compatibility alias for route().
+        User requests this specific signature for robustness.
+        """
+        # Pass session state context if available
+        context = str(session_state) if session_state else None
+        return await self.classify(message, context=context)
 
     def _check_manual_overrides(self, message: str) -> Optional[IntentResult]:
         """Strict keyword overrides for production determinism (V15)."""

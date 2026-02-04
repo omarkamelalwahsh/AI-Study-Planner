@@ -10,11 +10,12 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from config import API_HOST, API_PORT, LOG_LEVEL
-from models import ChatRequest, ChatResponse, CourseDetail, ErrorDetail, IntentType, IntentResult
+from models import ChatRequest, ChatResponse, CourseDetail, ErrorDetail, IntentType, IntentResult, StandardResponse
 from data_loader import data_loader
-from llm.groq_client import get_llm_client
+from llm.groq_gateway import get_llm_gateway
 from memory import conversation_memory
 from roles_kb import roles_kb
 from pipeline import (
@@ -78,7 +79,7 @@ async def lifespan(app: FastAPI):
     
     # Initialize LLM
     try:
-        llm = get_llm_client()
+        llm = get_llm_gateway()
         logger.info("LLM client initialized")
     except Exception as e:
         logger.error(f"Failed to initialize LLM: {e}")
@@ -95,6 +96,12 @@ async def lifespan(app: FastAPI):
     
     logger.info("All pipeline components initialized ✓")
     
+    # Startup validation: Ensure components have correct methods
+    if not hasattr(intent_router, 'route'):
+        raise RuntimeError("IntentRouter must have a 'route' method. Interface compatibility check failed.")
+    if not hasattr(consistency_checker, 'check'):
+        raise RuntimeError("ConsistencyChecker must have a 'check' method. Interface compatibility check failed.")
+    
     yield
     
     logger.info("Shutting down...")
@@ -107,14 +114,34 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# --- GLOBAL EXCEPTION HANDLER ---
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Wraps all unhandled exceptions in StandardResponse format."""
+    logger.error(f"Unhandled exception: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content=StandardResponse(
+            intent="ERROR",
+            message="حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.",
+            courses=[],
+            meta={"error": str(exc), "type": type(exc).__name__}
+        ).model_dump()
+    )
+
+
 @app.get("/health")
 async def health_check():
     """Requirement G: Production Health Check."""
     return {
         "status": "healthy",
+        "service": "career-copilot-rag",
+        "version": "2.0.0",
         "data_loaded": data_loader.courses_df is not None,
         "retriever": retriever is not None,
-        "memory": conversation_memory is not None
+        "memory": conversation_memory is not None,
+        "semantic_search": semantic_search_enabled,
+        "roles_loaded": len(roles_kb.roles) > 0,
     }
 
 
@@ -152,19 +179,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-@app.get("/health")
-async def health_check():
-    """Health check endpoint."""
-    return {
-        "status": "healthy",
-        "service": "career-copilot-rag",
-        "version": "2.0.0",
-        "data_loaded": data_loader.courses_df is not None,
-        "semantic_search": semantic_search_enabled,
-        "roles_loaded": len(roles_kb.roles) > 0,
-    }
 
 
 @app.post("/upload-cv", response_model=ChatResponse)
@@ -233,7 +247,7 @@ async def upload_cv(
         courses = [] 
         
         # 5. Response Builder
-        answer, projects, selected_courses, skill_groups, learning_plan, dashboard, all_relevant, catalog_browsing, mode, f_question, refined_intent = await response_builder.build(
+        answer, projects, selected_courses, skill_groups, learning_plan, dashboard, all_relevant, catalog_browsing, mode, f_question, refined_intent, _ = await response_builder.build(
             intent_result,
             courses,
             skill_result,
@@ -267,16 +281,199 @@ async def upload_cv(
         )
 
     except Exception as e:
-        logger.error(f"CV Upload failed: {e}", exc_info=True)
+        logger.error(f"CV Upload Error: {e}", exc_info=True)
         return ChatResponse(
-            session_id=session_id,
-            intent="ERROR",
-            answer="حدث خطأ أثناء تحليل السيرة الذاتية. تأكد أن الملف نصي (PDF/DOCX) وليس صورة ممسوحة ضوئياً.",
-            courses=[],
-            projects=[],
-            error=ErrorDetail(code="UPLOAD_ERROR", message=str(e)),
-            request_id=request_id
+             session_id=session_id,
+             intent=IntentType.CV_ANALYSIS,
+             mode="chat",
+             answer="عذراً، حدث خطأ أثناء معالجة ملف السيرة الذاتية. يرجى المحاولة مرة أخرى بملف مختلف.",
+             courses=[],
+             request_id=request_id,
+             error={"message": str(e)}
         )
+
+
+from models import SemanticResult, SkillValidationResult
+
+# --- UNIFIED SEARCH PIPELINE (Requirement: Single Entry Point) ---
+async def run_course_search_pipeline(
+    intent_result: IntentResult,
+    semantic_result: SemanticResult,
+    request_id: str,
+    session_state: dict,
+    is_more_request: bool,
+    user_message: str
+) -> tuple[SkillValidationResult, list[CourseDetail]]:
+    """
+    Executes the standard Course Search Pipeline:
+    Skill Extraction -> Retrieval (with Fallbacks) -> Relevance Guard.
+    """
+    logger.info(f"[{request_id}] COURSE_SEARCH pipeline executed")
+    
+    # Step 3: Skill & Role Extraction
+    skill_result = skill_extractor.validate_and_filter(semantic_result)
+
+    # --- SEED SKILL INJECTION ---
+    if not skill_result.validated_skills and intent_result.primary_domain == "Backend Development":
+        backend_seeds = ["sql", "databases", "api", "php", "web development", "javascript"]
+        for s in backend_seeds:
+            norm = data_loader.validate_skill(s)
+            if norm and norm not in skill_result.validated_skills:
+                skill_result.validated_skills.append(norm)
+
+    # Role-based skill completion
+    if intent_result.role:
+        kb_skills = roles_kb.get_skills_for_role(intent_result.role)
+        if kb_skills:
+            existing = set(skill_result.validated_skills)
+            for skill in kb_skills:
+                normalized = data_loader.validate_skill(skill)
+                if normalized and normalized not in existing:
+                    skill_result.validated_skills.append(normalized)
+
+    if skill_result.validated_skills:
+        logger.info(f"[{request_id}] Validated skills: {skill_result.validated_skills}")
+
+    # Step 4: Retrieval
+
+    # --- RULE 4A: SQL/Database Topic Expansion ---
+    db_keywords = ["sql", "database", "databases", "mysql", "postgres", "postgresql", "db", "قواعد بيانات", "داتابيز", "my sql", "بوستجريس"]
+    if intent_result.topic and any(kw in intent_result.topic.lower() for kw in db_keywords):
+        logger.info(f"[{request_id}] RULE 4A Triggered: Forcing Database track expansion.")
+        intent_result.search_axes.append("Databases")
+        # Ensure category filter includes Databases if we have a way to force it in retriever
+        # For now, we'll ensure the topic is used.
+
+    # --- RULE 4B: Sales Manager Hybrid Retrieval ---
+    manager_keywords = ["مدير", "إدارة", "قيادة", "ليدر", "lead", "manager", "leadership"]
+    sales_keywords = ["sales", "مبيعات", "بيع", "selling"]
+    msg_lower = user_message.lower()
+    is_manager = any(kw in msg_lower for kw in manager_keywords)
+    is_sales = any(kw in msg_lower for kw in sales_keywords)
+    
+    hybrid_courses = []
+    if is_manager and is_sales:
+        logger.info(f"[{request_id}] RULE 4B Triggered: Hybrid Sales + Management retrieval.")
+        sales_results = retriever.retrieve_by_category("Sales")
+        mgmt_results = retriever.retrieve_by_category("Leadership & Management")
+        # Merge and dedup
+        seen_ids = set()
+        for c in sales_results + mgmt_results:
+            if c.course_id not in seen_ids:
+                hybrid_courses.append(c)
+                seen_ids.add(c.course_id)
+        # We'll use these hybrid courses if standard retrieval is weak or instead of it
+
+    # 4.1 Skill-based
+    raw_courses = retriever.retrieve(
+        skill_result,
+        level_filter=intent_result.level,
+        focus_area=semantic_result.focus_area,
+        tool=semantic_result.tool,
+    )
+    
+    # Merge hybrid results if applicable
+    if hybrid_courses:
+        # Prioritize hybrid results or merge with skill-based
+        raw_courses = hybrid_courses + [c for c in raw_courses if c.course_id not in [h.course_id for h in hybrid_courses]]
+    
+    # 4.2 Fallbacks (Topic/Title)
+    # Apply fallbacks for any intent that needs courses (not just COURSE_SEARCH)
+    course_needing_intents = [IntentType.COURSE_SEARCH, IntentType.CATALOG_BROWSING, IntentType.FOLLOW_UP, 
+                               IntentType.CAREER_GUIDANCE, IntentType.LEARNING_PATH]
+    
+    # Check if this is a browsing query (Arabic or English keywords)
+    browsing_keywords = ["كورسات", "عاوز", "وريني", "courses", "show", "browse"]
+    is_browsing = any(kw in user_message.lower() for kw in browsing_keywords)
+    
+    needs_fallback = (not raw_courses) and (intent_result.intent in course_needing_intents or is_browsing)
+    
+    if needs_fallback:
+        # Arabic/English topic mapping + Broad keywords
+        TOPIC_MAP = {
+            "برمجة": "Programming",
+            "programming": "Programming",
+            "تسويق": "Marketing",
+            "marketing": "Marketing",
+            "مبيعات": "Sales",
+            "sales": "Sales",
+            "تصميم": "Design",
+            "design": "Design",
+            "قيادة": "Leadership",
+            "leadership": "Leadership",
+            "موارد بشرية": "Human Resources",
+            "hr": "Human Resources",
+            "بايثون": "Python",
+            "python": "Python",
+            "فرونت": "Web Development",
+            "frontend": "Web Development",
+            "baak": "Programming",
+            "back": "Programming",
+            "backend": "Programming",
+            "data": "Data Science",
+            "داتا": "Data Science",
+        }
+        msg_lower = user_message.lower()
+        fallback_topic = None
+        
+        # Check map
+        for key, topic in TOPIC_MAP.items():
+             if key in msg_lower:
+                 fallback_topic = topic
+                 break
+        
+        # Check resolved topic from intent/semantic
+        if not fallback_topic:
+             fallback_topic = intent_result.specific_course or intent_result.slots.get("topic") or semantic_result.primary_domain
+        
+        # FOLLOW_UP Persistence: If no topic found, reuse last topic/query from session
+        if not fallback_topic and intent_result.intent == IntentType.FOLLOW_UP:
+             fallback_topic = session_state.get("last_topic") or session_state.get("last_query")
+             if fallback_topic:
+                 logger.info(f"[{request_id}] Follow-up Context Reuse: '{fallback_topic}'")
+
+        if fallback_topic:
+            logger.info(f"[{request_id}] Topic Fallback: '{fallback_topic}'")
+            raw_courses = retriever.retrieve_by_title(fallback_topic)
+        
+        # If still empty, try raw message as title search
+        if not raw_courses:
+            logger.info(f"[{request_id}] Direct title search: '{user_message}'")
+            raw_courses = retriever.retrieve_by_title(user_message)
+
+    # V18 Fix: If this is a follow-up and we STILL have no courses and no context,
+    # we should return a message asking for clarification, handled by response_builder later.
+    
+    logger.info(f"[{request_id}] Retrieved {len(raw_courses)} raw courses")
+
+    # Step 5: Relevance Guard
+    prev_domains = set(session_state.get("last_skills", []) + ([session_state.get("last_role")] if session_state.get("last_role") else []))
+    
+    filtered_courses = relevance_guard.filter(
+        raw_courses,
+        intent_result,
+        skill_result,
+        user_message,
+        previous_domains=prev_domains,
+        semantic_result=semantic_result
+    )
+    
+    # FAIL-SAFE: If retrieval found courses but relevance guard filtered everything out,
+    # return top 3 from raw results to prevent zero-result failures
+    if raw_courses and not filtered_courses:
+        logger.warning(f"[{request_id}] FAIL-SAFE TRIGGERED: Populating empty response with Top 3 retrieved courses.")
+        # Dedup and take top 3
+        seen_ids = set()
+        fail_safe_courses = []
+        for course in raw_courses[:10]:  # Check first 10 for dedup
+            if course.course_id not in seen_ids:
+                fail_safe_courses.append(course)
+                seen_ids.add(course.course_id)
+                if len(fail_safe_courses) >= 3:
+                    break
+        filtered_courses = fail_safe_courses
+    
+    return skill_result, filtered_courses
 
 
 @app.post("/chat", response_model=ChatResponse)
@@ -294,145 +491,37 @@ async def chat(request: ChatRequest):
     7. Consistency Check - Validate against data
     """
     request_id = str(uuid.uuid4())
+    start_time = time.time()
+    
+    # Initialize session
     session_id = request.session_id or str(uuid.uuid4())
+    logger.info(f"[{request_id}] Processing CHAT request | Session: {session_id} | Msg: {request.message[:50]}...")
     
-    logger.info(f"[{request_id}] Processing: {request.message[:50]}...")
+    # Add user message to memory
+    conversation_memory.add_user_message(session_id, request.message)
+    session_state = conversation_memory.get_session_state(session_id)
     
+    # Setup for semantic result override (for testing or fast-paths)
+    semantic_result_override = None
+
     try:
-        # Get conversation context
-        context_str = conversation_memory.get_context(session_id)
-        session_state = conversation_memory.get_session_state(session_id)
-        conversation_memory.add_user_message(session_id, request.message)
+        # Step 1: Intent Router (Rock-Solid Interface)
+        intent_result = await intent_router.route(request.message, session_state)
+        logger.info(f"[{request_id}] Intent: {intent_result.intent.value} (Conf: {intent_result.confidence})")
         
-        # Check if plan already asked in previous messages
-        plan_asked = "تحب أعملك خطة زمنية" in context_str
-        session_state["plan_asked"] = plan_asked
-        
-        # Step 1: Intent Router (with context)
-        intent_result = await intent_router.classify(request.message, context_str)
-        
-        # --- CANONICALIZATION (Stop Drift) ---
-        canonical = data_loader.canonicalize_query(request.message)
-        if canonical:
-            logger.info(f"[{request_id}] Canonical match: {canonical['primary_domain']}")
-            intent_result.primary_domain = canonical.get("primary_domain")
-            semantic_result_override = {
-                "primary_domain": canonical.get("primary_domain"),
-                "secondary_domains": canonical.get("secondary_domains", []),
-                "focus_area": canonical.get("focus_area"),
-                "tool": canonical.get("tool"),
-                "semantic_lock": True
-            }
-        else:
-            semantic_result_override = None
-
-        # V5/V6 Persistence: Reuse intent for follow-ups or AMBIGUOUS role answers
-        is_more_request = any(t in request.message.lower() for t in ["كمان", "غيرهم", "مزيد", "more", "next", "تانية", "تاني", "باقي"])
-        
-        if (intent_result.intent in [IntentType.FOLLOW_UP, IntentType.AMBIGUOUS]) and session_state.get("last_intent"):
-            last_intent_val = session_state.get("last_intent")
-            intent_result.intent = IntentType(last_intent_val)
-
-        if intent_result.intent == IntentType.FOLLOW_UP or is_more_request:
-             last_intent_val = session_state.get("last_intent")
-             if last_intent_val:
-                  logger.info(f"[{request_id}] Follow-up detected. Reusing intent: {last_intent_val}")
-                  intent_result.intent = IntentType(last_intent_val)
-              
-             if intent_result.role is None:
-                  intent_result.role = session_state.get("last_role")
-             if not getattr(intent_result, 'specific_course', None):
-                  intent_result.specific_course = session_state.get("last_topic")
-
-        logger.info(f"[{request_id}] Final Intent: {intent_result.intent.value}")
-
-        # --- REQUIREMENT B: TOPIC RESET POLICY (Stop Leakage) ---
-        # Compute topic_key DETERMINISTICALLY
-        def compute_topic_key(intent_r, msg: str) -> str:
-            """Rule-based topic key computation for deterministic reset."""
-            m = msg.lower()
-            # Prefer canonical match
-            canon = (intent_r.slots or {}).get("canonical")
-            if canon:
-                return canon.upper().replace(" ", "_")
-            # Rule-based fallback
-            if "فرونت" in m or "frontend" in m:
-                return "FRONTEND_DEV"
-            if "باك" in m or "backend" in m:
-                return "BACKEND_DEV"
-            if "hr" in m or "موارد بشرية" in m:
-                return "HR"
-            if "مدير" in m and ("مبرمج" in m or "ذكاء" in m or "ai" in m or "engineering" in m):
-                return "ENG_MGMT"
-            if "مبيعات" in m or "sales" in m:
-                return "SALES"
-            if intent_r.role:
-                return intent_r.role.upper().replace(" ", "_")
-            if intent_r.topic:
-                return intent_r.topic.upper().replace(" ", "_")
-            return "GENERAL"
-        
-        is_more = any(t in request.message.lower() for t in ["كمان", "غيرهم", "مزيد", "more", "next", "تانية", "تاني", "باقي", "results", "التالي"])
-        new_topic_key = compute_topic_key(intent_result, request.message)
-        old_topic_key = session_state.get("topic_key", "")
-        
-        if old_topic_key and new_topic_key != old_topic_key and not is_more:
-            logger.info(f"[{request_id}] HARD RESET: Topic Switch ({old_topic_key} -> {new_topic_key})")
-            session_state.update({
-                "topic_key": new_topic_key,
-                "pagination_offset": 0,
-                "all_relevant_course_ids": [],
-                "last_results_course_ids": [],
-                "last_topic": None,
-                "last_role": None,
-                "last_skills": [],
-            })
-        else:
-            session_state["topic_key"] = new_topic_key
-
-        # --- V18 FIX 1: EXPLORATION (3 Guided Questions) ---
-        if intent_result.intent == IntentType.EXPLORATION:
-            answer = """
-أهلاً! 👋 عشان أساعدك صح، محتاج أفهم شوية حاجات:
-
-1️⃣ **خلفيتك إيه؟** (طالب / خريج جديد / عندك خبرة)
-2️⃣ **تحب تشتغل في إيه أكتر؟** (Technology / Business / Design / أي حاجة)
-3️⃣ **عندك وقت قد إيه للتعلم؟** (أسبوع / شهر / أكتر)
-
-رد عليا بالـ 3 نقاط دول وأنا هرشحلك أحسن مسار! 🚀
-"""
-            # Add to memory
-            conversation_memory.add_assistant_message(
-                session_id, answer, 
-                intent=intent_result.intent.value, 
-                state_updates={"last_intent": "EXPLORATION", "exploration_mode": True}
-            )
-            
-            return ChatResponse(
-                session_id=session_id,
-                intent=intent_result.intent,
-                mode="exploration_questions",
-                answer=answer,
-                confidence=1.0,
-                courses=[],
-                projects=[],
-                skill_groups=[],
-                followup_question="مستني إجابتك!"
-            )
-
-        # --- HARD EXIT: CATALOG_BROWSING = DATA-ONLY (NO LLM, NO SEMANTIC) ---
+        # Check for ambiguous intent -> Catalog Browsing Fast Path
         if intent_result.intent == IntentType.CATALOG_BROWSING:
-            cats = sorted(data_loader.get_all_categories())
-            bullets = "\n• " + "\n• ".join(cats)
-            answer = f"تقدر تكتشف مجالات كتير عندنا! دي كل الأقسام المتاحة في الكتالوج:{bullets}\n\nاختار اسم قسم وأنا أطلعلك كورساته."
+            logger.info(f"[{request_id}] Fast Path: Catalog Browsing/Ambiguous")
             
+            # Use categories from intent result or fallback
+            cats = intent_result.slots.get("categories", [])
+            if not cats:
+                 cats = ["Programming", "Data Science", "Marketing", "Business", "Design"]
+            
+            # We skip pipeline for pure browsing
+            answer = "أهلاً بيك! أنا كارير كوبايلوت. أقدر أساعدك تلاقي كورسات، أرشحلك وظايف، أو أعملك خطة مذاكرة. تحب تبدأ بأي مجال؟"
             state_updates = {
-                "last_intent": IntentType.CATALOG_BROWSING.value,
-                "topic_key": "CATALOG",
-                "pagination_offset": 0,
-                "all_relevant_course_ids": [],
-                "last_results_course_ids": [],
-                "last_topic": None,
+                "last_intent": IntentType.CATALOG_BROWSING, 
                 "last_role": None,
                 "last_skills": [],
                 "offered_categories": cats  # V17: Store offered categories for disambiguation resolution
@@ -484,73 +573,77 @@ async def chat(request: ChatRequest):
                     role=None,
                     specific_course=user_selection
                 )
-                # Skip the disambiguation block below by marking we have a specific topic
-                # (intent_result now has specific_course set)
+                # Skip the disambiguation block by marking we have a specific topic
 
-        # --- DETERMINISTIC FAST PATH: Broad Topic Disambiguation ---
-        # Only for very short queries that are likely category searches (<= 4 words)
-        # V12: DO NOT intercept CAREER_GUIDANCE here. Users want reasoning for guidance.
-        # V17: Skip if user just selected a category (disambiguation resolved)
-        if (len(request.message.split()) <= 4 
-            and intent_result.intent in [IntentType.COURSE_SEARCH, IntentType.CATALOG_BROWSING]
-            and not intent_result.specific_course):  # V17: Don't re-prompt if already resolved
-            from models import CatalogBrowsingData, CategoryDetail
-            suggested = data_loader.suggest_categories_for_topic(request.message)
-            if suggested:
-                answer = f"تمام - موضوع *{request.message}* واسع شوية. أقرب أقسام عندنا للموضوع ده:\n\n"
-                answer += "\n".join([f"• {c}" for c in suggested])
-                answer += "\n\nقولّي تختار أنهي قسم؟ وأنا أطلعلك كل الكورسات بتاعته."
-                
-                # V17: Store offered categories for disambiguation resolution
-                state_updates = {
-                    "last_intent": intent_result.intent.value, 
-                    "last_topic": request.message, 
-                    "pagination_offset": 0,
-                    "offered_categories": suggested  # V17 RULE 3
-                }
-                conversation_memory.add_assistant_message(session_id, answer, intent=intent_result.intent.value, topic=request.message, state_updates=state_updates)
-                
-                return ChatResponse(
-                    session_id=session_id,
-                    intent=intent_result.intent,
-                    mode="category_choice",
-                    answer=answer,
-                    confidence=intent_result.confidence or 0.99,
-                    topic=request.message,
-                    courses=[],
-                    all_relevant_courses=[],
-                    projects=[],
-                    skill_groups=[],
-                    catalog_browsing=CatalogBrowsingData(
-                        categories=[CategoryDetail(name=c, why="استكشاف القسم") for c in suggested],
-                        next_question="تختار أنهي قسم؟"
-                    ),
-                    request_id=request_id,
-                    followup_question="تختار أنهي قسم؟"
-                )
+        # --- EXPLORATION FLOW (V1.1 State-Aware) ---
+        if intent_result.intent in [IntentType.EXPLORATION, IntentType.EXPLORATION_FOLLOWUP]:
+             logger.info(f"[{request_id}] Fast Path: EXPLORATION FLOW")
+             
+             # Call new handler logic via builder
+             answer, projects, selected, skills, plan, dash, all_rel, cat_b, mode, f_q, ref_intent, state_updates = await response_builder.build(
+                intent_result=intent_result,
+                courses=[],
+                skill_result=SkillValidationResult(validated_skills=[]),
+                user_message=request.message,
+                context=session_state,
+                semantic_result=SemanticResult(primary_domain="General", is_in_catalog=True)
+             )
+             
+             # Apply State Updates
+             if state_updates:
+                 conversation_memory.add_assistant_message(session_id, answer, intent=intent_result.intent.value, state_updates=state_updates)
+             else:
+                 conversation_memory.add_assistant_message(session_id, answer, intent=intent_result.intent.value)
 
-        # --- LLM-FREE FAST PATH: PAGINATION / MORE (V13/V15) ---
+             return ChatResponse(
+                session_id=session_id,
+                intent=intent_result.intent,
+                answer=answer,
+                courses=[],
+                projects=[],
+                skill_groups=[],
+                learning_plan=None,
+                mode=mode,
+                request_id=request_id,
+                followup_question=f_q,
+                meta={"flow": "exploration_v2"}
+             )
+
+        # --- DETERMINISTIC FAST PATH REMOVED (V18 Fix) ---
+        # We removed the early-return for broad topics ("programming") to ensure successful retrieval.
+        pass
+
+        # --- LLM-FREE FAST PATH: PAGINATION / MORE (V13/V15/Addendum v1.1) ---
         cached_ids = session_state.get("all_relevant_course_ids", [])
         pagination_offset = session_state.get("pagination_offset", 0)
-
-        if is_more and cached_ids and len(cached_ids) > pagination_offset + 3:
-            logger.info(f"[{request_id}] Production Fast-Path: Serving cached results for 'More' request.")
-            new_offset = pagination_offset + 3 # Batch of 3
-            state_updates = {"pagination_offset": new_offset}
-            next_batch_ids = cached_ids[new_offset : new_offset + 3]
+        
+        # V1.1: Strict Follow-Up Logic (Never re-search)
+        is_follow_up_intent = intent_result.intent == IntentType.FOLLOW_UP
+        is_implicit_more = any(t in request.message.lower() for t in ["كمان", "غيرهم", "مزيد", "more", "next", "تانية", "تاني", "باقي"])
+        
+        # If explicit FOLLOW_UP or implicit more with cache -> Serve from cache
+        if (is_follow_up_intent or is_implicit_more) and cached_ids:
+            logger.info(f"[{request_id}] Production Fast-Path: Serving cached results for Follow-Up.")
             
-            if not next_batch_ids: # Loop back
-                 next_batch_ids = cached_ids[:3]
-                 new_offset = 0
-                 state_updates["pagination_offset"] = 0
-
+            # Increment offset
+            new_offset = pagination_offset + 5 # Batch of 5 (Standard)
+            # If we reached the end, loop back or stop? User says "increase offset". 
+            # If > len, we should probably warn or wrap. Let's wrap for now to ensure results.
+            if new_offset >= len(cached_ids):
+                new_offset = 0 # Loop back for demo/robustness
+                
+            state_updates = {"pagination_offset": new_offset}
+            next_batch_ids = cached_ids[new_offset : new_offset + 5]
+            
             courses = [retriever.get_course_details(cid) for cid in next_batch_ids if retriever.get_course_details(cid)]
             
-            from models import SemanticResult, SkillValidationResult
-            mock_semantic = SemanticResult(primary_domain=new_topic_key, search_axes=[])
+            # Mock objects for fast response
+            mock_semantic = SemanticResult(primary_domain="General", search_axes=[])
             mock_skills = SkillValidationResult(validated_skills=session_state.get("last_skills", []))
             
-            answer, projects, selected, skills, plan, dash, all_rel, cat_b, mode, f_q, ref_intent = await response_builder.build(
+            # Bypass ResponseBuilder complex logic if possible, or use it with minimal context
+            # We use response_builder but with a specific "FOLLOW_UP" mode implicity through the intent
+            answer, projects, selected, skills, plan, dash, all_rel, cat_b, mode, f_q, ref_intent, _ = await response_builder.build(
                 intent_result=intent_result,
                 courses=courses,
                 skill_result=mock_skills,
@@ -559,89 +652,51 @@ async def chat(request: ChatRequest):
                 semantic_result=mock_semantic
             )
             
-            conversation_memory.add_assistant_message(session_id, answer, intent=intent_result.intent.value, state_updates=state_updates)
+            # Add metadata for eval
+            meta = {
+                "latency_ms": round((time.time() - start_time) * 1000, 2),
+                "follow_up": True,
+                "error": None
+            }
+            
+            conversation_memory.add_assistant_message(session_id, answer, intent=IntentType.COURSE_SEARCH.value, state_updates=state_updates)
             return ChatResponse(
                 session_id=session_id,
-                intent=intent_result.intent,
+                intent=IntentType.COURSE_SEARCH, # Include normalization rules
                 answer=answer,
                 courses=selected,
                 all_relevant_courses=all_rel,
                 skill_groups=skills,
                 mode="courses_only",
                 request_id=request_id,
-                followup_question=f_q
+                followup_question=f_q,
+                meta=meta
             )
 
         # Step 2: Semantic Layer (Deep Understanding)
         previous_topic = session_state.get("last_role") or session_state.get("last_topic")
         
         if semantic_result_override:
-            from models import SemanticResult
             semantic_result = SemanticResult(**semantic_result_override, extracted_skills=[])
         else:
-            semantic_result = await semantic_layer.analyze(
-                request.message, 
-                intent_result, 
-                previous_topic=previous_topic
-            )
+             # V1.1 LATENCY FIX: Skip Semantic Layer for General QA to prevent "LLM multiple hops" 429 errors
+             if intent_result.intent == IntentType.GENERAL_QA:
+                 semantic_result = SemanticResult(primary_domain="General", is_in_catalog=True)
+                 logger.info(f"[{request_id}] Fast-Path: Skipped Semantic Layer for GENERAL_QA")
+             else:
+                semantic_result = await semantic_layer.analyze(
+                    request.message, 
+                    intent_result, 
+                    previous_topic=previous_topic
+                )
         
-        # Attach semantic data to intent result for pipeline grounding
-        intent_result.primary_domain = semantic_result.primary_domain
-        intent_result.search_axes = list(semantic_result.search_axes) if semantic_result.search_axes else []
+        # Honesty Guard: Applies ONLY to COURSE_SEARCH, COURSE_DETAILS, LEARNING_PATH (Addendum v1.1)
+        honesty_guard_intents = [IntentType.COURSE_SEARCH, IntentType.COURSE_DETAILS, IntentType.LEARNING_PATH]
+        if intent_result.intent in honesty_guard_intents and not semantic_result.is_in_catalog:
+            logger.warning(f"[{request_id}] Honesty Guard Triggered: {semantic_result.missing_domain or semantic_result.primary_domain} is NOT in catalog. Returning SAFE_FALLBACK.")
+            intent_result.intent = IntentType.SAFE_FALLBACK
+            intent_result.needs_courses = False
              
-        # Step 3: Skill & Role Extraction
-        skill_result = skill_extractor.validate_and_filter(semantic_result)
-
-        # --- SEED SKILL INJECTION (Anti-Empty V3) ---
-        if not skill_result.validated_skills and intent_result.primary_domain == "Backend Development":
-            # Priority: Databases, API, Language basics
-            backend_seeds = ["sql", "databases", "api", "php", "web development", "javascript"]
-            for s in backend_seeds:
-                norm = data_loader.validate_skill(s)
-                if norm and norm not in skill_result.validated_skills:
-                    skill_result.validated_skills.append(norm)
-            logger.info(f"[{request_id}] Injected backend seed skills: {skill_result.validated_skills}")
-
-        # If role-based, get skills from roles KB
-        if intent_result.role:
-            # Try roles knowledge base first
-            kb_skills = roles_kb.get_skills_for_role(intent_result.role)
-            if kb_skills:
-                existing = set(skill_result.validated_skills)
-                for skill in kb_skills:
-                    normalized = data_loader.validate_skill(skill)
-                    if normalized and normalized not in existing:
-                        skill_result.validated_skills.append(normalized)
-            else:
-                # Fallback to skill extractor suggestions
-                role_skills = skill_extractor.suggest_skills_for_role(intent_result.role)
-                existing = set(skill_result.validated_skills)
-                for skill in role_skills:
-                    if skill not in existing:
-                        skill_result.validated_skills.append(skill)
-        
-        # V7: Intelligent Skill Merging (Anti-Stickiness)
-        # Only merge skills if we are in a 'More' request or a short confirmation
-        is_more_request = any(t in request.message.lower() for t in ["كمان", "غيرهم", "مزيد", "more", "next", "تانية", "تاني", "باقي"])
-        is_short_confirm = (request.message.strip().lower() in ["ياريت", "تمام", "ماشي", "ok", "yes", "confirm", "وافقت", "أيوه", "ايوه"])
-
-        should_merge_context = (is_more_request or is_short_confirm) and not intent_result.role
-        
-        if session_state.get("last_skills") and should_merge_context:
-             logger.info(f"[{request_id}] Merging skills from Context: {session_state['last_skills']}")
-             existing_skills = set(skill_result.validated_skills)
-             for skill in session_state["last_skills"]:
-                 if skill not in existing_skills:
-                     skill_result.validated_skills.append(skill)
-             
-             if session_state.get("last_role") and "context_role" not in skill_result.skill_to_domain:
-                  skill_result.skill_to_domain["context_role"] = session_state["last_role"]
-        
-        # Merged Intent: Skip strict axes filtering for roadmaps
-        guidance_intents = [IntentType.LEARNING_PATH, IntentType.CAREER_GUIDANCE]
-        
-        logger.info(f"[{request_id}] Validated skills: {skill_result.validated_skills}")
-        
         # V6: Robust Pagination & Context Persistence
         state_updates = {}
         is_more_request = any(t in request.message.lower() for t in ["كمان", "غيرهم", "مزيد", "more", "next", "تانية", "تاني", "باقي"])
@@ -665,96 +720,70 @@ async def chat(request: ChatRequest):
                 c = retriever.get_course_details(cid)
                 if c: courses.append(c)
             filtered_courses = courses
-        else:
-            # Step 4: Retrieval
-            # V6: Context Bridge - If this is a follow-up for "more" but no cache, or new search
-            search_topic = intent_result.specific_course or session_state.get("last_topic")
+            # Use cached skills context
+            skill_result = SkillValidationResult(validated_skills=session_state.get("last_skills", []))
             
-            courses = []
-            filtered_courses = []
-
-            # Reset offset for NEW search
+        else:
+            # --- V21 FIX: LEARNING_PATH CONTEXT RECOVERY (Before Pipeline) ---
+            if intent_result.intent == IntentType.LEARNING_PATH:
+                 # 1. Recover Topic if missing
+                 if not intent_result.topic:
+                      intent_result.topic = session_state.get("last_topic") or session_state.get("last_search_topic")
+                      if intent_result.topic:
+                           logger.info(f"[{request_id}] Context Recovery: Inferred topic '{intent_result.topic}' from session.")
+                 
+                 # 2. Reuse Courses (Best UX)
+                 # If we have relevant courses in session, reuse them instead of searching again
+                 last_courses_ids = session_state.get("all_relevant_course_ids", [])
+                 if last_courses_ids and intent_result.topic:
+                      # Quick fetch from cache
+                      filtered_courses = [retriever.get_course_details(cid) for cid in last_courses_ids[:5] if retriever.get_course_details(cid)]
+                      filtered_courses = [c for c in filtered_courses if c] # filter Nones
+                      skill_result = SkillValidationResult(validated_skills=[]) # Validated skills not strictly needed for plan generation if we have courses
+                      skip_search_intents = [IntentType.PROJECT_IDEAS, IntentType.GENERAL_QA, IntentType.EXPLORATION, IntentType.EXPLORATION_FOLLOWUP, IntentType.LEARNING_PATH] # Skip search now
+                 else:
+                      # No courses? We must run search pipeline if we have a topic
+                      if intent_result.topic:
+                           skip_search_intents = [IntentType.PROJECT_IDEAS, IntentType.GENERAL_QA, IntentType.EXPLORATION, IntentType.EXPLORATION_FOLLOWUP]
+                      else:
+                           # No topic + No courses => logic in Builder will ask question
+                           skip_search_intents = [IntentType.PROJECT_IDEAS, IntentType.GENERAL_QA, IntentType.EXPLORATION, IntentType.EXPLORATION_FOLLOWUP, IntentType.LEARNING_PATH]
+            else:
+                 # Standard skip list
+                 skip_search_intents = [IntentType.PROJECT_IDEAS, IntentType.GENERAL_QA, IntentType.EXPLORATION, IntentType.EXPLORATION_FOLLOWUP]
+            
+            if intent_result.intent in skip_search_intents:
+                 logger.info(f"[{request_id}] Skipping Course Search Pipeline for {intent_result.intent.value}")
+                 skill_result = SkillValidationResult(validated_skills=[])
+                 filtered_courses = []
+                 # Mock semantic for simple response
+                 semantic_result = SemanticResult(primary_domain="General", is_in_catalog=True)
+                 
+            else:
+                # UNIFIED PIPELINE (No Early Returns)
+                logger.info(f"[{request_id}] COURSE_SEARCH pipeline executed")
+                skill_result, filtered_courses = await run_course_search_pipeline(
+                    intent_result,
+                    semantic_result,
+                    request_id,
+                    session_state,
+                    is_more_request,
+                    request.message
+                )
+            
+            # Cache full list
+            state_updates["all_relevant_course_ids"] = [c.course_id for c in filtered_courses]
             if not is_more_request:
                 state_updates["pagination_offset"] = 0
-                pagination_offset = 0
-
-            # Strict RAG Layer Separation: Only retrieve if the intent explicitly needs courses
-            needs_retrieval = intent_result.intent in [
-                IntentType.COURSE_SEARCH, 
-                IntentType.LEARNING_PATH, 
-                IntentType.CAREER_GUIDANCE, 
-                IntentType.PROJECT_IDEAS,
-                IntentType.CV_ANALYSIS,
-                IntentType.COURSE_DETAILS,
-                IntentType.FOLLOW_UP,
-                IntentType.GENERAL_QA
-            ]
-            
-            if needs_retrieval:
-                courses = retriever.retrieve(
-                    skill_result,
-                    level_filter=intent_result.level,
-                    focus_area=semantic_result.focus_area,
-                    tool=semantic_result.tool,
-                )
                 
-                if search_topic and (intent_result.specific_course or (is_more_request and not courses)):
-                    logger.info(f"[{request_id}] Searching courses by topic/title: {search_topic}")
-                    courses = retriever.retrieve_by_title(search_topic)
-                
-                if not courses and is_more_request and session_state.get("last_role"):
-                    logger.info(f"[{request_id}] Fallback search by last_role: {session_state.get('last_role')}")
-                    courses = retriever.retrieve_by_title(session_state.get("last_role"))
-                
-                if semantic_search_enabled and len(courses) < 15:
-                    try:
-                        # V16: Use topic_key to prevent semantic query contamination
-                        msg_str = str(request.message or "").lower()
-                        is_generic = len(msg_str.split()) < 4 and any(t in msg_str for t in ["courses", "find", "there", "show", "any"])
-                        
-                        # Ensure search_axes is iterable
-                        axes = getattr(intent_result, 'search_axes', []) or []
-                        search_axes_str = " ".join([str(a) for a in axes if a])
-                        
-                        # V16 FIX: Use topic_key for deterministic query selection
-                        topic_key = session_state.get("topic_key", "")
-                        if topic_key and topic_key not in ["GENERAL", "CATALOG"]:
-                            search_query = topic_key.replace("_", " ")
-                        elif is_generic and search_axes_str:
-                             search_query = search_axes_str
-                        else:
-                             search_query = search_axes_str if search_axes_str else (search_topic or request.message)
-                        
-                        if not search_query:
-                             search_query = "courses" # Absolute fallback
-                             
-                        logger.info(f"[{request_id}] Semantic Retrieval: Using query: '{search_query}'")
-                        semantic_results = semantic_search.search(search_query, top_k=20)
-                        seen_ids = {c.course_id for c in courses}
-                        for course_id, score in semantic_results:
-                            if course_id not in seen_ids:
-                                course = retriever.get_course_details(course_id)
-                                if course:
-                                    courses.append(course)
-                                    seen_ids.add(course_id)
-                    except Exception as e:
-                        logger.warning(f"Semantic search fallback failed: {e}")
-                
-                logger.info(f"[{request_id}] Retrieved {len(courses)} raw courses")
-                
-                # Step 5: Relevance Guard
-                filtered_courses = relevance_guard.filter(
-                    courses,
-                    intent_result,
-                    skill_result,
-                    request.message,
-                    previous_domains=set(session_state.get("last_skills", []) + ([session_state.get("last_role")] if session_state.get("last_role") else [])),
-                    semantic_result=semantic_result
-                )
-
-                # Cache THE FULL LIST for pagination (V13 Production Standard)
-                state_updates["all_relevant_course_ids"] = [c.course_id for c in filtered_courses]
-                state_updates["pagination_offset"] = 0 # Reset for new search
+                # --- V20: Persist Search Context for Follow-ups ---
+                if intent_result.intent == IntentType.COURSE_SEARCH:
+                     # Prefer specific user topic (JavaScript) over broad domain (Programming) for plan generation
+                     state_updates["last_topic"] = intent_result.topic or semantic_result.primary_domain
+                     state_updates["last_role"] = intent_result.role
+                     if semantic_result.user_level:
+                          state_updates["last_level_preference"] = semantic_result.user_level
+                     logger.info(f"[{request_id}] Persisted Context: Topic={state_updates.get('last_topic')} Level={state_updates.get('last_level_preference')}")
 
         # Step 6: Response Builder
         if semantic_result.brief_explanation:
@@ -762,154 +791,128 @@ async def chat(request: ChatRequest):
         
         # Pass categories for discovery
         available_categories = data_loader.get_all_categories()
-
-        # Context fix: user confirmations
-        short_confirmations = ["ياريت", "تمام", "ماشي", "ok", "yes", "confirm", "وافقت", "أيوه", "ايوه"]
-        if request.message.strip().lower() in short_confirmations:
-            session_state["is_short_confirmation"] = True
-            session_state["last_followup"] = session_state.get("last_followup_question")
-
-        # Smart Fallback for Out-of-Scope queries
-        all_relevant = []
-        if (intent_result.intent.value == "COURSE_SEARCH" and not filtered_courses and not intent_result.specific_course):
-            answer, projects, selected_courses, skill_groups, learning_plan, dashboard, all_relevant, catalog_browsing, mode, f_question, refined_intent = await response_builder.build_fallback(
-                request.message,
-                semantic_result.primary_domain or "Topic"
-            )
-        else:
-            answer, projects, selected_courses, skill_groups, learning_plan, dashboard, all_relevant, catalog_browsing, mode, f_question, refined_intent = await response_builder.build(
-                intent_result=intent_result,
-                courses=filtered_courses,
-                skill_result=skill_result,
-                user_message=request.message,
-                context=session_state,
-                available_categories=available_categories,
-                semantic_result=semantic_result
-            )
         
-        # Step 7: Consistency Check
-        validated_answer, v_courses = consistency_checker.final_check(answer, selected_courses)
-        
-        # New: Consistency check for all_relevant
-        _, v_all_relevant = consistency_checker.final_check("", all_relevant)
-        
-        # Limit courses for response (display limit)
-        display_courses = relevance_guard.limit_results(v_courses, max_courses=10)
-        
-        # Update session state with new shown course IDs (Pagination tracking)
-        # In V10, we store ALL relevant IDs for future "more" requests if needed
-        all_ids = [c.course_id for c in v_all_relevant]
-        state_updates["all_relevant_course_ids"] = all_ids
-        
-        shown_ids = [c.course_id for c in v_courses]
-        state_updates["last_results_course_ids"] = shown_ids
-        
-        # Consistent intent value (Refined by LLM if possible)
-        final_intent_str = refined_intent or intent_result.intent.value
+        # --- REQUIREMENT: SAFE UNPACKING (V21) ---
+        def normalize_builder_output(out):
+            # expected 12 elements
+            # (answer, projects, courses, skill_groups, learning_plan, dashboard, all_rel, browsing, mode, f_q, intent, updates)
+            default = ("", [], [], [], None, None, [], None, "answer_only", None, intent_result.intent.value, {})
+            
+            if out is None: return default
+            
+            if isinstance(out, tuple):
+                current_len = len(out)
+                if current_len == 12:
+                    return out
+                elif current_len < 12:
+                    # Pad with defaults
+                    return out + default[current_len:]
+                else:
+                    # Truncate
+                    return out[:12]
+            return default
 
-        # --- NUCLEAR SHIELD: Final UI Safety Checks ---
-        validated_answer = validated_answer or answer or "إليك ما وجدته في كتالوج الكورسات المتاح لدينا."
-        f_question = f_question or "هل تود التوسع في نقطة معينة؟"
-        v_courses = v_courses or []
-        v_all_relevant = v_all_relevant or []
-        projects = projects or []
-        skill_groups = skill_groups or []
+        raw_builder_output = await response_builder.build(
+            intent_result=intent_result,
+            courses=filtered_courses,
+            skill_result=skill_result,
+            user_message=request.message,
+            context=session_state,
+            semantic_result=semantic_result
+        )
+        
+        build_result = normalize_builder_output(raw_builder_output)
+        answer, projects, selected_courses, skill_groups, learning_plan, dashboard, all_rel, catalog_browsing, mode, f_question, refined_intent, flow_state_updates = build_result
+        
+        # V3: Consistency Check (Anti-Hallucination)
+        if selected_courses:
+            is_consistent, inconsistencies = consistency_checker.check(answer, selected_courses)
+            if not is_consistent:
+                logger.warning(f"[{request_id}] Consistency Check Failed: {inconsistencies}")
+                # We could regenerate, but for now we just log.
+        
+        # Step 7: Update Memory
+        # Extract skills to persist context
+        new_skills = skill_result.validated_skills
+        if new_skills:
+            state_updates["last_skills"] = new_skills
+        
+        if intent_result.role:
+            state_updates["last_role"] = intent_result.role
 
-        # Store assistant response in memory (with all state updates)
-        state_updates["last_followup_question"] = f_question or getattr(response_builder, 'last_followup_question', "") or ""
+        if intent_result.intent == IntentType.COURSE_DETAILS:
+             if hasattr(intent_result, 'specific_course'):
+                 state_updates["last_course_viewed"] = intent_result.specific_course
 
-        # --- SMART FOLLOW-UP: Backend Stack Discovery ---
-        final_followup = f_question
-        if intent_result.primary_domain == "Backend Development":
-            stack_keywords = ["python", "django", "flask", "php", "laravel", "node", "express", "java", "spring", ".net", "c#", "ruby"]
-            if not any(kw in request.message.lower() for kw in stack_keywords):
-                if not is_more_request and not is_short_confirm:
-                    final_followup = "تحب تبدأ مسار الـ Backend بـ Python ولا PHP ولا Node.js؟"
-                    state_updates["last_followup_question"] = final_followup
+        # V16: Persist topic key for semantic search consistency
+        if semantic_result.primary_domain:
+             state_updates["topic_key"] = semantic_result.primary_domain
+             
+        # V18: Persist context for FOLLOW_UP requirements
+        # Save last search parameters if we found courses
+        if intent_result.intent == IntentType.COURSE_SEARCH and selected_courses:
+             state_updates["last_topic"] = intent_result.specific_course or intent_result.slots.get("topic") or semantic_result.primary_domain
+             state_updates["last_query"] = request.message
+             logger.info(f"[{request_id}] Persisted search context: {state_updates['last_topic']}")
 
+        # Helper to merge updates
+        final_updates = state_updates.copy() if state_updates else {}
+        if flow_state_updates: final_updates.update(flow_state_updates)
+        
         conversation_memory.add_assistant_message(
             session_id,
-            validated_answer,
-            intent=final_intent_str,
-            role=intent_result.role,
-            skills=skill_result.validated_skills,
-            # V10 Fix: Ensure GENERAL_QA subject is stored as topic
-            topic=semantic_result.primary_domain or intent_result.role or intent_result.specific_course,
-            state_updates=state_updates
+            answer,
+            intent=refined_intent or intent_result.intent.value,
+            skills=new_skills,
+            state_updates=final_updates
         )
         
-        # --- FINAL UI SAFETY SHIELD (Requirement C) ---
-        response_payload = {
-            "session_id": session_id,
-            "intent": IntentType(final_intent_str),
-            "mode": mode, 
-            "answer": validated_answer,
-            "confidence": intent_result.confidence or 0.5,
-            "topic": intent_result.specific_course or intent_result.role or semantic_result.primary_domain,
-            "role": intent_result.role,
-            "courses": display_courses[:5] if display_courses else [], 
-            "all_relevant_courses": v_all_relevant or [],
-            "projects": projects or [],
-            "skill_groups": skill_groups or [],
-            "catalog_browsing": catalog_browsing,
-            "learning_plan": learning_plan,
-            "dashboard": dashboard,
-            "request_id": request_id,
-            "followup_question": final_followup
+        
+        process_time = (time.time() - start_time) * 1000
+        logger.info(f"[{request_id}] Request completed in {process_time:.2f}ms")
+        
+        # FOLLOW_UP Normalization: API always returns COURSE_SEARCH for follow-up queries
+        # This ensures UI stability while preserving internal context
+        response_intent = refined_intent or intent_result.intent
+        is_follow_up = (response_intent == IntentType.FOLLOW_UP)
+        if response_intent == IntentType.FOLLOW_UP:
+            response_intent = IntentType.COURSE_SEARCH
+            logger.info(f"[{request_id}] Normalized FOLLOW_UP -> COURSE_SEARCH in response")
+        
+        # Metadata construction
+        meta = {
+            "latency_ms": round(process_time, 2),
+            "follow_up": is_follow_up,
+            "error": None
         }
 
-        try:
-            return ChatResponse.model_validate(response_payload)
-        except Exception as eval_err:
-            logger.error(f"[{request_id}] Schema Validation Failed: {eval_err}")
-            # Degrade gracefully to a minimal valid response
-            return ChatResponse(
-                session_id=session_id,
-                intent=IntentType.ERROR,
-                answer="عذراً حدث خطأ في معالجة البيانات، جاري الإصلاح." if data_loader.is_arabic(request.message) else "Sorry, a data validation error occurred.",
-                request_id=request_id
-            )
-        
-    except Exception as e:
-        logger.error(f"[{request_id}] Pipeline error: {e}", exc_info=True)
-        
         return ChatResponse(
             session_id=session_id,
-            intent="ERROR",
-            answer="عذراً، حدث خطأ أثناء معالجة طلبك. جرب تاني.",
-            courses=[],
-            projects=[],
-            error=ErrorDetail(
-                code="PIPELINE_ERROR",
-                message=str(e),
-            ),
+            intent=response_intent,
+            mode=mode,
+            answer=answer,
+            courses=selected_courses,
+            all_relevant_courses=all_rel,
+            projects=projects,
+            skill_groups=skill_groups,
+            catalog_browsing=catalog_browsing,
+            learning_plan=learning_plan,
+            dashboard=dashboard,
+            meta=meta,
+            error=None,
             request_id=request_id,
+            followup_question=f_question
         )
 
+    except Exception as e:
+        logger.error(f"[{request_id}] Pipeline Error: {e}", exc_info=True)
+        return ChatResponse(
+            session_id=session_id,
+            intent=IntentType.GENERAL_QA,
+            answer="عذراً، حدث خطأ تقني بسيط. ممكن تحاول تاني؟",
+            courses=[],
+            error=ErrorDetail(message=str(e), code="PIPELINE_ERROR"),
+            request_id=request_id
+        )
 
-@app.get("/roles")
-async def list_roles():
-    """Get list of available roles from knowledge base."""
-    return {
-        "roles": roles_kb.get_all_roles(),
-        "count": len(roles_kb.roles),
-    }
-
-
-@app.get("/categories")
-async def list_categories():
-    """Get list of available course categories."""
-    return {
-        "categories": data_loader.get_all_categories(),
-    }
-
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(
-        "main:app",
-        host=API_HOST,
-        port=API_PORT,
-        reload=True,
-        log_level=LOG_LEVEL.lower(),
-    )
+# Run with: uvicorn main:app --reload

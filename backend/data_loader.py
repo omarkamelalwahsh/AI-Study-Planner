@@ -79,6 +79,10 @@ class DataLoader:
         "مبيعات": ["Sales", "Customer Service", "Business Fundamentals", "Marketing Skills"],
         "data": ["Technology Applications", "Programming", "Business Fundamentals"],
         "بيانات": ["Technology Applications", "Programming", "Business Fundamentals"],
+        "database": ["Data Security", "Programming", "Technology Applications"],
+        "data base": ["Data Security", "Programming", "Technology Applications"],
+        "داتابيز": ["Data Security", "Programming", "Technology Applications"],
+        "قواعد بيانات": ["Data Security", "Programming", "Technology Applications"],
         "cyber": ["Data Security", "Networking", "Technology Applications"],
         "سايبر": ["Data Security", "Networking", "Technology Applications"],
         "security": ["Data Security", "Networking", "Technology Applications"],
@@ -235,7 +239,14 @@ class DataLoader:
             "تصميم جرافيك": "graphic design",
             "التصميم الجرافيكي": "graphic design",
             "graphic design": "graphic design",
-            "design": "graphic design" 
+            "graphic design": "graphic design",
+            "design": "graphic design",
+            # JavaScript aliases (V21 Fix)
+            "java script": "javascript",
+            "js": "javascript",
+            "جافا سكريبت": "javascript",
+            "جافاسكريبت": "javascript",
+            "جافااسكريبت": "javascript"
         }
         for alias, norm in manual_aliases.items():
              self.skill_aliases[alias] = norm
@@ -430,13 +441,15 @@ class DataLoader:
         # Backend Lock
         backend_kw = ["باك اند", "backend", "back-end", "server", "api", "rest", "graphql", 
                       "database", "sql", "postgres", "postgresql", "mysql", "داتابيز", "قاعدة بيانات"]
-        if any(kw in msg for kw in backend_kw):
-            return {
-                "primary_domain": "Backend Development",
-                "focus_area": "Web Development",
-                "tool": "Backend",
+        # Database Lock (V27 Distinct from Backend)
+        db_kw = ["database", "data base", "sql", "mysql", "postgres", "mongodb", "داتابيز", "قواعد بيانات", "قاعدة بيانات"]
+        if any(kw in msg for kw in db_kw):
+             return {
+                "primary_domain": "Database Administration", # New domain key
+                "focus_area": "Data Management", 
+                "tool": "Database",
                 "semantic_lock": True
-            }
+             }
             
         # Frontend Lock
         frontend_kw = ["فرونت اند", "front-end", "frontend", "react", "vue", "angular", "css", "html", "javascript"]

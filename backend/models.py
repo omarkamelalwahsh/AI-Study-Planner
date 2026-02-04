@@ -2,7 +2,7 @@
 Career Copilot RAG Backend - Pydantic Models
 Request/Response schemas for the API.
 """
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Dict, Union
 from pydantic import BaseModel, Field
 from enum import Enum
 
@@ -23,6 +23,7 @@ class IntentType(str, Enum):
     GENERAL_QA = "GENERAL_QA"
     SAFE_FALLBACK = "SAFE_FALLBACK"
     EXPLORATION = "EXPLORATION"  # V18: User doesn't know what to learn
+    EXPLORATION_FOLLOWUP = "EXPLORATION_FOLLOWUP" # V20: Multi-turn exploration state
 
 
 class ChatRequest(BaseModel):
@@ -189,22 +190,76 @@ class ErrorDetail(BaseModel):
     code: str
     message: str
 
-class ChatResponse(BaseModel):
-    """Response returned to frontend"""
-    session_id: str
-    intent: IntentType
-    mode: Optional[str] = None # e.g. "category_explorer"
-    answer: str
-    confidence: float = 0.0
+# --- V1.2/V1.3 New Models ---
+class ChoiceQuestion(BaseModel):
+    """Multiple-choice question for exploration flow"""
+    question: str
+    choices: List[str] = Field(default_factory=list)
+
+
+class LearningItem(BaseModel):
+    """Represents a day or week in a schedule"""
+    day_or_week: str = Field(alias="day") # Support both for internal safety
+    topics: List[str] = Field(default_factory=list)
+    tasks: List[str] = Field(default_factory=list)
+    deliverable: Optional[str] = None
+
+    class Config:
+        populate_by_name = True
+
+
+class LearningPlan(BaseModel):
+    """Structured learning plan (Production V1)"""
     topic: Optional[str] = None
-    role: Optional[str] = None
-    courses: List[CourseDetail] = Field(default_factory=list) 
-    all_relevant_courses: List[CourseDetail] = Field(default_factory=list) 
+    duration: Optional[str] = None
+    time_per_day: Optional[str] = None
+    schedule: List[LearningItem] = Field(default_factory=list)
+
+
+class ProjectDetail(BaseModel):
+    """Project suggestion for career guidance"""
+    title: str
+    level: str = "Beginner"
+    features: List[str] = Field(default_factory=list)
+    stack: List[str] = Field(default_factory=list)
+    deliverable: Optional[str] = None
+    # Legacy fields
+    description: Optional[str] = None
+    suggested_tools: List[str] = Field(default_factory=list)
+
+
+class FlowStateUpdates(BaseModel):
+    """Session state updates for the frontend"""
+    topic: Optional[str] = None
+    track: Optional[str] = None
+    duration: Optional[str] = None
+    time_per_day: Optional[str] = None
+    active_flow: Optional[str] = None
+    exploration: Optional[dict] = None
+
+
+class ChatResponse(BaseModel):
+    """Strict JSON Output Contract for Career Copilot"""
+    intent: IntentType
+    language: str = "ar"
+    answer: str
+    ask: Optional[ChoiceQuestion] = None
+    learning_plan: Optional[LearningPlan] = None
+    courses: List[CourseDetail] = Field(default_factory=list)
     projects: List[ProjectDetail] = Field(default_factory=list)
+    flow_state_updates: Optional[FlowStateUpdates] = None
+    
+    # Metadata for internal tracking (not necessarily in final UI contract but useful for API)
+    session_id: Optional[str] = None
+    request_id: Optional[str] = None
+    meta: Dict[str, Any] = Field(default_factory=dict)
+    
+    # Legacy/Extended fields (optional)
+    all_relevant_courses: List[CourseDetail] = Field(default_factory=list)
     skill_groups: List[SkillGroup] = Field(default_factory=list)
     catalog_browsing: Optional[CatalogBrowsingData] = None
-    learning_plan: Optional[LearningPlan] = None
     dashboard: Optional[CVDashboard] = None
     error: Optional[ErrorDetail] = None
-    request_id: Optional[str] = None
     followup_question: Optional[str] = None 
+
+ 

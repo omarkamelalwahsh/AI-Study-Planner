@@ -39,7 +39,7 @@ SEMANTIC_SYSTEM_PROMPT = """أنت محلل دلالي (Semantic Analyzer) لن�
     "brief_explanation": "شرح دقيق بالعربي للدور ومسؤولياته.",
     "is_in_catalog": true/false,
     "missing_domain": "string if not in catalog, else null",
-    "search_axes": ["Exact keywords for RAG"]
+    "search_axes": ["Exact user topic (e.g. 'Frontend' NOT 'Web Development')", "Then Broad Category"]
 }"""
 
 

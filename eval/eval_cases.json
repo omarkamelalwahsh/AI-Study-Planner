@@ -1,0 +1,101 @@
+[
+    {
+        "id": "1",
+        "description": "Exploration (Guidance)",
+        "input": "مش عارف احدد تخصصي ومحتاج مساعدة",
+        "expected_intent": "EXPLORATION",
+        "notes": "User is lost -> Exploration."
+    },
+    {
+        "id": "2",
+        "description": "Catalog Browsing (English)",
+        "input": "List all available track",
+        "expected_intent": "CATALOG_BROWSING",
+        "notes": "Explicit catalog request."
+    },
+    {
+        "id": "3",
+        "description": "Mixed Query (Concept)",
+        "input": "شرح Deep Learning بالعربي",
+        "expected_intent": "COURSE_SEARCH",
+        "min_courses": 1
+    },
+    {
+        "id": "4",
+        "description": "Role Guidance (Product)",
+        "input": "How to become a Product Owner",
+        "expected_intent": "CAREER_GUIDANCE",
+        "min_courses": 1
+    },
+    {
+        "id": "5",
+        "description": "Honesty Guard (Law)",
+        "input": "Legal courses for lawyers",
+        "expected_intent": "SAFE_FALLBACK",
+        "max_courses": 0
+    },
+    {
+        "id": "6",
+        "description": "QA (Comparison Trap)",
+        "input": "ايه الفرق بين Java و JavaScript؟",
+        "expected_intent": "GENERAL_QA",
+        "notes": "Pure QA, no search."
+    },
+    {
+        "id": "7",
+        "description": "Specific Course (Named)",
+        "input": "تفاصيل كورس AWS Solutions Architect",
+        "expected_intent": "COURSE_DETAILS",
+        "min_courses": 1
+    },
+    {
+        "id": "8",
+        "description": "Follow-Up (Arabic)",
+        "input": "وهات كمان نتايج",
+        "expected_intent": "COURSE_SEARCH",
+        "min_courses": 1,
+        "notes": "Should normalize to SEARCH w/ pagination."
+    },
+    {
+        "id": "9",
+        "description": "Broad Topic (Management)",
+        "input": "Management",
+        "expected_intent": "COURSE_SEARCH",
+        "min_courses": 1
+    },
+    {
+        "id": "10",
+        "description": "Implicit Career Goal",
+        "input": "I want to be a hacker",
+        "expected_intent": "CAREER_GUIDANCE",
+        "min_courses": 1
+    },
+    {
+        "id": "11",
+        "description": "Arabic Skill (AI)",
+        "input": "تعليم الذكاء الاصطناعي",
+        "expected_intent": "COURSE_SEARCH",
+        "min_courses": 1
+    },
+    {
+        "id": "12",
+        "description": "Negative Constraint (Kotlin)",
+        "input": "Not Java, I want Kotlin",
+        "expected_intent": "COURSE_SEARCH",
+        "min_courses": 1
+    },
+    {
+        "id": "13",
+        "description": "Learning Path (Frontend)",
+        "input": "اديني خطة مذاكرة للفرونت اند شهرين",
+        "expected_intent": "LEARNING_PATH",
+        "expect_plan": true
+    },
+    {
+        "id": "14",
+        "description": "Project Ideas (Portfolio)",
+        "input": "عايز افكار مشاريع اعملها في البورتفوليو",
+        "expected_intent": "PROJECT_IDEAS",
+        "min_projects": 1
+    }
+]

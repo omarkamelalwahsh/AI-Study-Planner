@@ -84,6 +84,31 @@ class ConsistencyChecker:
         
         return True
     
+    def check(
+        self,
+        answer: str,
+        courses: List[CourseDetail],
+    ) -> tuple[bool, List[str]]:
+        """
+        Production Hardening: Multi-return consistency check.
+        Returns (is_consistent, inconsistencies).
+        """
+        inconsistencies = []
+        
+        # 1. Existence Check
+        valid_courses = self.validate_courses(courses)
+        if len(valid_courses) < len(courses):
+            missing = len(courses) - len(valid_courses)
+            inconsistencies.append(f"Removed {missing} courses not found in database.")
+            
+        # 2. Text Grounding Check
+        # For now simple pass, but can be expanded
+        is_valid_text, _ = self.validate_response_text(answer, valid_courses)
+        if not is_valid_text:
+            inconsistencies.append("Response text mentions courses not in the data list.")
+            
+        return len(inconsistencies) == 0, inconsistencies
+
     def final_check(
         self,
         answer: str,
