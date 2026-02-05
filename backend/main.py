@@ -514,23 +514,43 @@ async def chat(request: ChatRequest):
         # Step 1: Intent Router (Rock-Solid Interface)
         intent_result = await intent_router.route(request.message, session_state)
         
-        # --- EXPLORATION LOCK & FALLBACK RULES (Zedny Production) ---
-        try:
-            active_f = session_state.get("active_flow")
-            if active_f == "EXPLORATION_FLOW":
-                # Rule: Exploraton Domain List Fallback
-                undecided_kws = ["مش عارف اختار", "ساعدني اختار", "محتار", "اختارلي", "مش محدد", "أي مجال", "أى مجال"]
-                if any(kw in request.message for kw in undecided_kws):
-                    logger.info(f"[{request_id}] EXPLORATION FALLBACK triggered: Undecided user. Forcing CATALOG_BROWSING")
-                    intent_result = intent_result.model_copy(update={"intent": IntentType.CATALOG_BROWSING})
-                else:
-                    # Rule: Exploration Lock
-                    logger.info(f"[{request_id}] EXPLORATION LOCK triggered. Forcing intent from {intent_result.intent.value} to EXPLORATION_FOLLOWUP")
-                    intent_result = intent_result.model_copy(update={"intent": IntentType.EXPLORATION_FOLLOWUP})
-        except Exception as lock_err:
-            logger.error(f"[{request_id}] EXPLORATION RULE ERROR: {lock_err}")
+        # --- ZEDNY PRODUCTION RULES (Locking & Fallback) ---
+        exploration_state = session_state.get("exploration", {})
+        active_f = session_state.get("active_flow")
+        stage = (exploration_state or {}).get("stage")
+        
+        if stage == "locked":
+            chosen_domain = exploration_state.get("chosen_domain")
+            msg = request.message.lower()
+            if any(kw in msg for kw in ["خطة", "plan", "roadmap", "مسار"]):
+                logger.info(f"[{request_id}] Rule 1 Trigger: Force LEARNING_PATH for {chosen_domain}")
+                intent_result.intent = IntentType.LEARNING_PATH
+                intent_result.topic = chosen_domain
+                intent_result.confidence = 1.0
+            elif any(kw in msg for kw in ["more", "كورسات", "كمان", "تانية"]):
+                logger.info(f"[{request_id}] Rule 1 Trigger: Force COURSE_SEARCH for {chosen_domain}")
+                intent_result.intent = IntentType.COURSE_SEARCH
+                intent_result.topic = chosen_domain
+                intent_result.confidence = 1.0
+                intent_result.needs_courses = True
+            else:
+                logger.info(f"[{request_id}] Rule 1 Trigger: Force CAREER_GUIDANCE for {chosen_domain}")
+                intent_result.intent = IntentType.CAREER_GUIDANCE
+                intent_result.topic = chosen_domain
+                intent_result.confidence = 1.0
+        
+        elif active_f == "EXPLORATION_FLOW":
+             # Unified Prompt v1 Flow: Exploration transitions to COURSE_SEARCH
+             # For intermediate steps, we keep it as EXPLORATION
+             intent_result.intent = IntentType.EXPLORATION_FOLLOWUP
+        
+        else:
+            undecided_triggers = ["مش عارف", "تايه", "محتار", "ساعدني", "مش عارف اختار", "I don't know", "help me choose"]
+            if any(kw in request.message for kw in undecided_triggers):
+                logger.info(f"[{request_id}] Rule 3 Trigger: Force EXPLORATION")
+                intent_result.intent = IntentType.EXPLORATION
             
-        logger.info(f"[{request_id}] Intent: {intent_result.intent.value} (Conf: {intent_result.confidence})")
+        logger.info(f"[{request_id}] Final Intent: {intent_result.intent.value if hasattr(intent_result.intent, 'value') else intent_result.intent}")
         
         # Check for ambiguous intent -> Catalog Browsing Fast Path
         if intent_result.intent == IntentType.CATALOG_BROWSING:
@@ -611,24 +631,53 @@ async def chat(request: ChatRequest):
                 semantic_result=SemanticResult(primary_domain="General", is_in_catalog=True)
              )
              
+             # Override Intent if Builder transitioned (e.g. to COURSE_SEARCH)
+             final_intent = ref_intent if ref_intent else intent_result.intent
+             
+             # ✅ IMMEDIATE RETRIEVAL (V2.0 Fix): If flow transitioned to COURSE_SEARCH, run pipeline NOW
+             courses = []
+             skill_groups = []
+             
+             if str(final_intent) == "COURSE_SEARCH" and state_updates and (state_updates.get("topic") or state_updates.get("track")):
+                 logger.info(f"[{request_id}] Exploration Flow -> Immediate Retrieval Triggered for {state_updates.get('topic')}")
+                 
+                 # Update intent result for pipeline
+                 intent_result.intent = IntentType.COURSE_SEARCH
+                 intent_result.topic = state_updates.get("topic")
+                 intent_result.needs_courses = True
+                 
+                 # Run Pipeline
+                 skill_result, courses = await run_course_search_pipeline(
+                     intent_result,
+                     SemanticResult(primary_domain=intent_result.topic, is_in_catalog=True),
+                     request_id,
+                     session_state,
+                     False,
+                     request.message
+                 )
+                 
+                 # Re-build answer with courses if needed, or just append courses to response
+                 # We kept 'answer' from builder which says "Here are courses for X", so just attach courses.
+             
              # Apply State Updates
              if state_updates:
-                 conversation_memory.add_assistant_message(session_id, answer, intent=intent_result.intent.value, state_updates=state_updates)
+                 conversation_memory.add_assistant_message(session_id, answer, intent=str(final_intent), state_updates=state_updates)
              else:
-                 conversation_memory.add_assistant_message(session_id, answer, intent=intent_result.intent.value)
+                 conversation_memory.add_assistant_message(session_id, answer, intent=str(final_intent))
 
              return ChatResponse(
                 session_id=session_id,
-                intent=intent_result.intent,
+                intent=final_intent,
                 answer=answer,
-                courses=[],
-                projects=[],
-                skill_groups=[],
-                learning_plan=None,
+                courses=courses,
+                projects=projects,
+                skill_groups=skills,
+                learning_plan=plan,
+                dashboard=dash,
                 request_id=request_id,
                 ask=f_q if isinstance(f_q, ChoiceQuestion) else None,
                 followup_question=f_q if isinstance(f_q, str) else None,
-                meta={"flow": "exploration_v2"}
+                meta={"flow": "exploration_v2", "transitioned": str(final_intent) != str(intent_result.intent)}
              )
 
         # --- DETERMINISTIC FAST PATH REMOVED (V18 Fix) ---

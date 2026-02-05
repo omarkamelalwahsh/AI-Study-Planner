@@ -293,7 +293,7 @@ class RelevanceGuard:
             # Special case for "Programming" and "Data Security" overlap for tech keywords
             tech_keywords = {'python', 'javascript', 'php', 'sql', 'mysql', 'html', 'css', 'programming', 'code', 'database'}
             if any(k in title or k in description for k in tech_keywords):
-                allowed_domains.update({'programming', 'data security'})
+                allowed_domains.update({'programming', 'data security', 'technology applications', 'web development'})
             
             # If course category is not in allowed domains, it's a cross-domain noise
             # V6 Fix: Allow partial matches (e.g. "Sales Strategy" matches "Sales")

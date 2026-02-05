@@ -19,6 +19,10 @@ interface Message {
     learning_plan?: any;
     dashboard?: any;
     intent?: string;
+    ask?: {
+        question: string;
+        choices: string[];
+    };
 }
 
 interface ChatSession {
@@ -132,6 +136,7 @@ export default function ChatInterface() {
                 learning_plan: response.learning_plan || null,
                 dashboard: response.dashboard || null,
                 intent: response.intent,
+                ask: response.ask || null,
             }
 
             // Animate the response
@@ -314,9 +319,44 @@ export default function ChatInterface() {
                     </div>
                 )}
 
+                // Typing and loading states
+                // ... (previous code)
+
                 {messages.map((msg: any) => (
                     <div key={msg.id} className="message-container">
                         <MessageBubble message={msg} />
+
+                        {/* NEW: Render Choice Questions (e.g. Exploration Flow) */}
+                        {msg.ask && msg.ask.choices && msg.ask.choices.length > 0 && (
+                            <div className="choice-questions-container" style={{ margin: '12px 0 12px 60px' }}>
+                                <div style={{ marginBottom: '8px', color: '#94a3b8', fontSize: '0.9rem' }}>
+                                    {msg.ask.question}
+                                </div>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                                    {msg.ask.choices.map((choice: string, idx: number) => (
+                                        <button
+                                            key={idx}
+                                            className="choice-chip"
+                                            onClick={() => setInput(choice)}
+                                            style={{
+                                                padding: '8px 16px',
+                                                borderRadius: '20px',
+                                                border: '1px solid #3b82f6',
+                                                background: 'rgba(59, 130, 246, 0.1)',
+                                                color: '#60a5fa',
+                                                cursor: 'pointer',
+                                                fontSize: '0.95rem',
+                                                transition: 'all 0.2s'
+                                            }}
+                                            onMouseOver={(e) => e.currentTarget.style.background = 'rgba(59, 130, 246, 0.2)'}
+                                            onMouseOut={(e) => e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)'}
+                                        >
+                                            {choice}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
 
                         {msg.catalog_browsing && (
                             <div className="catalog-browsing-container" style={{ margin: '12px 0 12px 60px' }}>

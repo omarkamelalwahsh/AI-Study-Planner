@@ -79,6 +79,11 @@ interface ChatResponse {
     dashboard: CVDashboard | null;
     error: ErrorDetail | null;
     request_id: string;
+    ask?: {
+        question: string;
+        choices: string[];
+    };
+    followup_question?: string;
 }
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';

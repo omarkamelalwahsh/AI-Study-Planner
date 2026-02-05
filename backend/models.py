@@ -11,19 +11,14 @@ class IntentType(str, Enum):
     COURSE_SEARCH = "COURSE_SEARCH"
     CAREER_GUIDANCE = "CAREER_GUIDANCE"
     CATALOG_BROWSING = "CATALOG_BROWSING"
-    PROJECT_IDEAS = "PROJECT_IDEAS"
-    COURSE_DETAILS = "COURSE_DETAILS"
     LEARNING_PATH = "LEARNING_PATH"
     FOLLOW_UP = "FOLLOW_UP"
-    CONCEPT_EXPLAIN = "CONCEPT_EXPLAIN"
-    CV_ANALYSIS = "CV_ANALYSIS"
-    ATS_CHECK = "ATS_CHECK"
-    AMBIGUOUS = "AMBIGUOUS"
-    ERROR = "ERROR"
     GENERAL_QA = "GENERAL_QA"
     SAFE_FALLBACK = "SAFE_FALLBACK"
-    EXPLORATION = "EXPLORATION"  # V18: User doesn't know what to learn
-    EXPLORATION_FOLLOWUP = "EXPLORATION_FOLLOWUP" # V20: Multi-turn exploration state
+    EXPLORATION = "EXPLORATION"
+    EXPLORATION_FOLLOWUP = "EXPLORATION_FOLLOWUP"
+    CV_ANALYSIS = "CV_ANALYSIS" # Internal use for uploads
+    PROJECT_IDEAS = "PROJECT_IDEAS" # Internal mapping for projects
 
 
 class ChatRequest(BaseModel):
@@ -50,18 +45,20 @@ class CourseDetail(BaseModel):
     linked_skill_keys: List[str] = [] # V12 Popover Mapping
 
 
-class ProjectDetail(BaseModel):
-    """Project suggestion for career guidance"""
-    title: str
-    difficulty: str = "Beginner"  # Renamed from level to difficulty per V4 spec
-    description: str
-    deliverables: List[str] = Field(default_factory=list)
-    suggested_tools: List[str] = Field(default_factory=list)
-    
-    # Legacy support if needed
-    level: Optional[str] = None 
-    skills: List[str] = Field(default_factory=list)
+# Legacy support classes kept but decoupled from main response models
+class WeeklySchedule(BaseModel):
+    """Legacy weekly schedule"""
+    week: int
+    focus: str
+    courses: List[str] = Field(default_factory=list)
+    outcomes: List[str] = Field(default_factory=list)
 
+class LearningPhase(BaseModel):
+    """Legacy learning phase"""
+    title: str
+    weeks: str
+    skills: List[str] = Field(default_factory=list)
+    deliverables: List[str] = Field(default_factory=list)
 
 class SkillItem(BaseModel):
     """A specific skill with justification and catalog grounding"""
@@ -79,31 +76,6 @@ class SkillGroup(BaseModel):
     why_it_matters: str
     skills: List[SkillItem]
 
-
-class WeeklySchedule(BaseModel):
-    """One week in a learning plan (Legacy)"""
-    week: int
-    focus: str
-    courses: List[str] = Field(default_factory=list)
-    outcomes: List[str] = Field(default_factory=list)
-
-class LearningPhase(BaseModel):
-    """A phase in a learning path (New V6)"""
-    title: str
-    weeks: str  # e.g. "1-3"
-    skills: List[str] = Field(default_factory=list)
-    deliverables: List[str] = Field(default_factory=list)
-
-class LearningPlan(BaseModel):
-    """Structured learning plan (V6 Standard)"""
-    weeks: Optional[int] = None
-    hours_per_day: Optional[float] = None
-    phases: List[LearningPhase] = Field(default_factory=list)
-    # schedule: List[WeeklySchedule] = [] # Removed duplicate/confusing field
-
-
-
-
 class IntentResult(BaseModel):
     """Result from intent classification"""
     intent: IntentType
@@ -120,6 +92,8 @@ class IntentResult(BaseModel):
     search_axes: List[str] = Field(default_factory=list) # Added for V5 Relevance Gate
     topic: Optional[str] = None  # V12 Core topic detected
     primary_domain: Optional[str] = None # Added for V3 Canonicalization
+    duration: Optional[str] = None
+    daily_time: Optional[str] = None
 
 
 class SemanticResult(BaseModel):
@@ -230,6 +204,8 @@ class ProjectDetail(BaseModel):
 
 class FlowStateUpdates(BaseModel):
     """Session state updates for the frontend"""
+    model_config = {"extra": "allow"}
+    
     topic: Optional[str] = None
     track: Optional[str] = None
     duration: Optional[str] = None

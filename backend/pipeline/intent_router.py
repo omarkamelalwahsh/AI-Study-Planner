@@ -12,37 +12,27 @@ logger = logging.getLogger(__name__)
 
 INTENT_SYSTEM_PROMPT = """SYSTEM: Career Copilot — Intent Router (Hard Rules)
 
+Output exactly one intent from:
+EXPLORATION, EXPLORATION_FOLLOWUP, CATALOG_BROWSING, COURSE_SEARCH, LEARNING_PATH, CAREER_GUIDANCE, FOLLOW_UP, GENERAL_QA, SAFE_FALLBACK
+
 PATCH — Intent Router Disambiguation (CAREER_GUIDANCE vs PROJECT_IDEAS)
 
 A) CAREER_GUIDANCE MUST trigger when the user asks "how to become / be / improve as" a role or skill.
 Examples: "ازاي ابقى مدير ناجح؟", "How to become a Product Owner?", "career pathway", "salary for X".
-Return CAREER_GUIDANCE.
 
-B) PROJECT_IDEAS ONLY when the user explicitly asks for projects:
-Arabic: "افكار مشاريع", "مشروعين", "portfolio projects", "بني مشروع".
+B) COURSE_SEARCH (Primary):
+If user says: "عاوز اتعلم / ذاكر / learn / study + <topic>" (e.g., "عاوز اتعلم SQL") or "رشحلي كورسات".
 
-C) PATCH — Intent Router for "I want to learn X":
-If user says: "عاوز اتعلم / ذاكر / learn / study + <topic>" (e.g., "عاوز اتعلم SQL")
-Route to: COURSE_SEARCH (primary). 
-NEVER route to CAREER_GUIDANCE for "I want to learn X" unless they ask about the career path specifically.
-
-D) PATCH — LEARNING_PATH must NOT fall into EXPLORATION flow:
+C) LEARNING_PATH:
 - Intent "LEARNING_PATH" triggers: "خطة", "plan", "roadmap", "جدول مذاكرة".
-- If user asks for a plan, return LEARNING_PATH. 
-- NEVER route to EXPLORATION_FOLLOWUP for plan requests.
 
-CRITICAL HARD OVERRIDES:
-1) If intent == PROJECT_IDEAS:
-   - Output must include: { "intent": "PROJECT_IDEAS", "confidence": 1.0, "pipeline": "PROJECTS_ONLY" }
-
-2) If intent == LEARNING_PATH:
-   - pipeline must be "PLAN_ONLY"
+D) EXPLORATION:
+- Triggers when user is unsure: "مش عارف", "تايه", "محتار", "ساعدني", "مش عارف اختار", "I don't know", "help me choose".
 
 Output JSON schema:
 {
-  "intent": "COURSE_SEARCH|LEARNING_PATH|CAREER_GUIDANCE|PROJECT_IDEAS|GENERAL_QA|SAFE_FALLBACK",
+  "intent": "EXPLORATION|EXPLORATION_FOLLOWUP|CATALOG_BROWSING|COURSE_SEARCH|LEARNING_PATH|CAREER_GUIDANCE|FOLLOW_UP|GENERAL_QA|SAFE_FALLBACK",
   "confidence": 0.0-1.0,
-  "pipeline": "PROJECTS_ONLY|PLAN_ONLY|COURSE_SEARCH|QA",
   "reason": "short",
   "slots": {"topic": "Extract EXACT user topic", "role": "...", "level": "..."}
 }
@@ -114,26 +104,23 @@ class IntentRouter:
         return await self.classify(message, context=context)
 
     def _check_manual_overrides(self, message: str) -> Optional[IntentResult]:
-        """Strict keyword overrides for production determinism (V15)."""
+        """Strict keyword overrides for production determinism (Unified Prompt v1)."""
         msg = message.strip().lower()
         
-        # V18 FIX 1: EXPLORATION (User doesn't know what to learn - Ask 3 questions)
+        # EXPLORATION (User unsure)
         exploration_kws = [
-            "مش عارف", "مش عارفة", "لا أعرف", "مش متأكد", "محتار", "confused",
-            "don't know", "not sure", "help me decide", "أبدأ منين", "ابدأ منين",
-            "عايز حاجة تفتحلي شغل", "تفتحلي شغل", "فتح شغل", "فرصة عمل",
-            "مش عارف اتعلم", "مش عارف ابدا", "مش عارفة ابدا"
+            "مش عارف", "تايه", "محتار", "ساعدني", "مش عارف اختار",
+            "I don't know", "help me choose", "أبدأ منين", "ابدأ منين"
         ]
         if any(kw in msg for kw in exploration_kws):
             return IntentResult(intent=IntentType.EXPLORATION, confidence=1.0, needs_explanation=True)
         
-        # 1. CATALOG_BROWSING (Requirement A - explicit catalog requests only)
+        # CATALOG_BROWSING
         catalog_kws = ["ايه الكورسات", "المتاحة", "كتالوج", "browse", "catalog", "categories", "أقسام", "مجالات", "تخصصات", "ايه المتاح"]
         if any(kw in msg for kw in catalog_kws):
             return IntentResult(intent=IntentType.CATALOG_BROWSING, confidence=1.0, needs_explanation=True)
 
-        # 2) Exact Category Recognition (Deterministic)
-        # If user mentions a real catalog category, route to COURSE_SEARCH directly.
+        # Exact Category Recognition -> COURSE_SEARCH
         from data_loader import data_loader
         all_cats = [c.lower() for c in data_loader.get_all_categories()]
         for cat in all_cats:
@@ -146,46 +133,20 @@ class IntentRouter:
                     needs_explanation=True
                 )
 
-        # 2. Exact Category Recognition (Stop Hallucinations of absence)
-        from data_loader import data_loader
-        all_cats = [c.lower() for c in data_loader.get_all_categories()]
-        for cat in all_cats:
-            if cat in msg and len(cat) > 3: # Avoid short matches like 'ai' if too broad
-                return IntentResult(
-                    intent=IntentType.COURSE_SEARCH,
-                    confidence=1.0,
-                    topic=cat,
-                    needs_courses=True,
-                    needs_explanation=True
-                )
+        # Manager Roles -> CAREER_GUIDANCE
+        if any(kw in msg for kw in ["مدير", "manager", "team lead", "engineering manager"]):
+            return IntentResult(
+                intent=IntentType.CAREER_GUIDANCE,
+                confidence=1.0,
+                needs_courses=True,
+                needs_explanation=True
+            )
 
-        # 3. COMPOUND MANAGER ROLES (Requirement D)
-        manager_roles = {
-            "مدير مبرمجين": "Engineering Management",
-            "مدير تقني": "Engineering Management",
-            "مدير ai": "Engineering Management",
-            "مدير فريق": "Leadership & Management",
-            "team lead": "Leadership & Management",
-            "engineering manager": "Engineering Management"
-        }
-        for kw, role in manager_roles.items():
-            if kw in msg:
-                return IntentResult(
-                    intent=IntentType.CAREER_GUIDANCE,
-                    confidence=1.0,
-                    role=role,
-                    topic=role,
-                    needs_courses=True,
-                    needs_explanation=True
-                )
-
-        # 3. OTHER DETERMINISTIC RULES
-        if any(kw in msg for kw in ["خطة", "مسار", "roadmap", "roadmap", "path"]):
+        # LEARNING_PATH
+        if any(kw in msg for kw in ["خطة", "مسار", "roadmap", "path", "plan"]):
             return IntentResult(intent=IntentType.LEARNING_PATH, confidence=1.0, needs_courses=True, needs_explanation=True)
             
-        if any(kw in msg for kw in ["سيفي", "cv", "سيرة ذاتية", "قيم المشروع"]):
-            return IntentResult(intent=IntentType.CV_ANALYSIS, confidence=1.0)
-
+        # FOLLOW_UP
         if any(kw in msg for kw in ["غيرهم", "كمان", "more", "next", "المزيد"]):
             return IntentResult(intent=IntentType.FOLLOW_UP, confidence=1.0)
 
