@@ -107,13 +107,27 @@ class IntentRouter:
         """Strict keyword overrides for production determinism (Unified Prompt v1)."""
         msg = message.strip().lower()
         
-        # EXPLORATION (User unsure)
+        # EXPLORATION (User unsure - Unified Prompt v1.0)
         exploration_kws = [
-            "مش عارف", "تايه", "محتار", "ساعدني", "مش عارف اختار",
+            "مش عارف", "تايه", "محتار", "ساعدني", "مش عارف اختار", "مش عارف أختار",
             "I don't know", "help me choose", "أبدأ منين", "ابدأ منين"
         ]
         if any(kw in msg for kw in exploration_kws):
             return IntentResult(intent=IntentType.EXPLORATION, confidence=1.0, needs_explanation=True)
+        
+        # MAIN DOMAINS -> IMMEDIATE COURSE_SEARCH (Rule B)
+        # ["Programming", "Data Science", "Marketing", "Business", "Design"]
+        main_domains = ["programming", "data science", "marketing", "business", "design"]
+        for domain in main_domains:
+            # Check for exact word or part of sentence
+            if domain in msg:
+                return IntentResult(
+                    intent=IntentType.COURSE_SEARCH,
+                    confidence=1.0,
+                    topic=domain.title(),
+                    needs_courses=True,
+                    needs_explanation=True
+                )
         
         # CATALOG_BROWSING
         catalog_kws = ["ايه الكورسات", "المتاحة", "كتالوج", "browse", "catalog", "categories", "أقسام", "مجالات", "تخصصات", "ايه المتاح"]

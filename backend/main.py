@@ -552,43 +552,8 @@ async def chat(request: ChatRequest):
             
         logger.info(f"[{request_id}] Final Intent: {intent_result.intent.value if hasattr(intent_result.intent, 'value') else intent_result.intent}")
         
-        # Check for ambiguous intent -> Catalog Browsing Fast Path
-        if intent_result.intent == IntentType.CATALOG_BROWSING:
-            logger.info(f"[{request_id}] Fast Path: Catalog Browsing/Ambiguous")
-            
-            # Use categories from intent result or fallback
-            cats = intent_result.slots.get("categories", [])
-            if not cats:
-                 cats = ["Programming", "Data Science", "Marketing", "Business", "Design"]
-            
-            # We skip pipeline for pure browsing
-            answer = "أهلاً بيك! أنا كارير كوبايلوت. أقدر أساعدك تلاقي كورسات، أرشحلك وظايف، أو أعملك خطة مذاكرة. تحب تبدأ بأي مجال؟"
-            state_updates = {
-                "last_intent": IntentType.CATALOG_BROWSING, 
-                "last_role": None,
-                "last_skills": [],
-                "offered_categories": cats  # V17: Store offered categories for disambiguation resolution
-            }
-            conversation_memory.add_assistant_message(session_id, answer, intent=IntentType.CATALOG_BROWSING.value, state_updates=state_updates)
-            
-            from models import CatalogBrowsingData, CategoryDetail
-            cat_details = [CategoryDetail(name=c, why="تصفح القسم") for c in cats]
-            
-            return ChatResponse(
-                session_id=session_id,
-                intent=IntentType.CATALOG_BROWSING,
-                answer=answer,
-                courses=[],
-                projects=[],
-                skill_groups=[],
-                catalog_browsing=CatalogBrowsingData(categories=cat_details, next_question="تختار أي قسم؟"),
-                learning_plan=None,
-                dashboard=None,
-                error=None,
-                request_id=request_id,
-                ask=ChoiceQuestion(question="تحب تختار قسم منهم ولا تحب أساعدك تختار على حسب هدفك؟", choices=[c.name for c in cat_details]),
-                followup_question=None
-            )
+        # Pure Catalog Browsing (Refined v1.0: Now flows through ResponseBuilder for consistency)
+        pass
 
         # --- V17 RULE 3: Disambiguation Resolution ---
         # If we offered categories last turn and user replied with one of them, treat as category selection
