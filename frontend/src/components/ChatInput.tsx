@@ -2,16 +2,21 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Send, Zap } from 'lucide-react';
+import { Send, Zap, Paperclip } from 'lucide-react';
+
 
 interface ChatInputProps {
     value: string;
     onChange: (val: string) => void;
-    onSend: () => void;
+    onSend: (text?: string) => void;
     isLoading: boolean;
+    onUploadCV: (file: File) => void;
 }
 
-export default function ChatInput({ value, onChange, onSend, isLoading }: ChatInputProps) {
+
+export default function ChatInput({ value, onChange, onSend, isLoading, onUploadCV }: ChatInputProps) {
+    const fileRef = React.useRef<HTMLInputElement>(null);
+
     return (
         <div className="p-4 md:p-6 shrink-0 bg-white/5 backdrop-blur-xl border-t border-white/10 relative z-20">
             <div className="max-w-4xl mx-auto relative group">
@@ -27,9 +32,32 @@ export default function ChatInput({ value, onChange, onSend, isLoading }: ChatIn
                         disabled={isLoading}
                     />
 
+                    {/* Hidden file input */}
+                    <input
+                        ref={fileRef}
+                        type="file"
+                        accept=".pdf"
+                        className="hidden"
+                        onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) onUploadCV(f);
+                            if (fileRef.current) fileRef.current.value = "";
+                        }}
+                    />
+
                     <div className="flex items-center gap-2 pl-2">
-                        {/* Quick Action (Hidden on mobile) */}
-                        <button className="p-2 hover:bg-white/5 rounded-full text-slate-400 hidden sm:flex transition-colors">
+                        {/* Upload Button */}
+                        <button
+                            type="button"
+                            onClick={() => fileRef.current?.click()}
+                            disabled={isLoading}
+                            className="p-2 hover:bg-white/10 rounded-full text-slate-400 transition-colors"
+                            title="رفع CV"
+                        >
+                            <Paperclip className="w-5 h-5" />
+                        </button>
+
+                        <button className="p-2 hover:bg-white/10 rounded-full text-slate-400 hidden sm:flex">
                             <Zap className="w-5 h-5" />
                         </button>
 
@@ -47,6 +75,7 @@ export default function ChatInput({ value, onChange, onSend, isLoading }: ChatIn
                             <Send className="w-5 h-5 rotate-180" />
                         </motion.button>
                     </div>
+
                 </div>
 
                 <p className="text-center text-[10px] text-slate-600 mt-3 font-medium uppercase tracking-[0.2rem] select-none">

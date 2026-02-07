@@ -247,7 +247,7 @@ async def upload_cv(
         courses = [] 
         
         # 5. Response Builder
-        answer, projects, selected_courses, skill_groups, learning_plan, dashboard, all_relevant, catalog_browsing, mode, f_question, refined_intent, _ = await response_builder.build(
+        chat_res = await response_builder.build(
             intent_result,
             courses,
             skill_result,
@@ -255,37 +255,27 @@ async def upload_cv(
             context=session_state
         )
         
+        chat_res.session_id = session_id
+        chat_res.request_id = request_id
+        chat_res.meta = {"flow": "cv_upload_v2"}
+
         # Store response
         conversation_memory.add_assistant_message(
             session_id,
-            answer,
+            chat_res.answer,
             intent=IntentType.CV_ANALYSIS,
             skills=skill_result.validated_skills
         )
 
-        return ChatResponse(
-            session_id=session_id,
-            intent=IntentType.CV_ANALYSIS,
-            answer=answer,
-            courses=selected_courses,
-            all_relevant_courses=all_relevant,
-            projects=projects,
-            skill_groups=skill_groups,
-            catalog_browsing=catalog_browsing,
-            learning_plan=learning_plan,
-            dashboard=dashboard,
-            error=None,
-            request_id=request_id,
-            ask=f_question if isinstance(f_question, ChoiceQuestion) else None,
-            followup_question=f_question if isinstance(f_question, str) else None
-        )
+        return chat_res
+
 
     except Exception as e:
         logger.error(f"CV Upload Error: {e}", exc_info=True)
         return ChatResponse(
              session_id=session_id,
              intent=IntentType.CV_ANALYSIS,
-             answer="تمام، بس ملف السيرة الذاتية محتاج يتراجع تاني. ممكن تحاول ترفعه بصيغة تانية أو تسألني في أي مجال تحب تبدأ فيه؟" if data_loader.is_arabic(request.message) else "Got it, but the CV file might need a quick check. Could you try uploading it in a different format, or just tell me which field you're interested in?",
+             answer="حصلت مشكلة أثناء رفع الملف. جرّب PDF أو DOCX، أو ابعتلي هدفك الوظيفي وأنا أساعدك فورًا.",
              courses=[],
              request_id=request_id,
              error=ErrorDetail(message=str(e), code="CV_PROCESSING_ERROR")
@@ -597,8 +587,8 @@ async def chat(request: ChatRequest):
              )
              
              # Override Intent if Builder transitioned (e.g. to COURSE_SEARCH)
-             final_intent = ref_intent if ref_intent else intent_result.intent
-             
+             final_intent = ref_intent or intent_result.intent
+             original_intent = (intent_result.intent and intent_result.intent.value) or "UNKNOWN"
              # ✅ IMMEDIATE RETRIEVAL (V2.0 Fix): If flow transitioned to COURSE_SEARCH, run pipeline NOW
              courses = []
              skill_groups = []
@@ -623,27 +613,34 @@ async def chat(request: ChatRequest):
                  
                  # Re-build answer with courses if needed, or just append courses to response
                  # We kept 'answer' from builder which says "Here are courses for X", so just attach courses.
-             
-             # Apply State Updates
-             if state_updates:
-                 conversation_memory.add_assistant_message(session_id, answer, intent=str(final_intent), state_updates=state_updates)
-             else:
-                 conversation_memory.add_assistant_message(session_id, answer, intent=str(final_intent))
-
-             return ChatResponse(
-                session_id=session_id,
-                intent=final_intent,
-                answer=answer,
-                courses=courses,
-                projects=projects,
-                skill_groups=skills,
-                learning_plan=plan,
-                dashboard=dash,
-                request_id=request_id,
-                ask=f_q if isinstance(f_q, ChoiceQuestion) else None,
-                followup_question=f_q if isinstance(f_q, str) else None,
-                meta={"flow": "exploration_v2", "transitioned": str(final_intent) != str(intent_result.intent)}
+                # Build and Update Response model
+             chat_res = await response_builder.build(
+                 intent_result=intent_result,
+                 courses=courses,
+                 skill_result=skill_result,
+                 user_message=request.message,
+                 context=session_state,
+                 semantic_result=SemanticResult(primary_domain=intent_result.topic, is_in_catalog=True) # Use the semantic result from the pipeline
              )
+             
+             chat_res.session_id = session_id
+             chat_res.request_id = request_id
+             chat_res.meta = {
+                 "latency_ms": round((time.time() - start_time) * 1000, 2),
+                 "flow": "v2_schema"
+             }
+
+             if chat_res.flow_state_updates:
+                  conversation_memory.add_assistant_message(
+                      session_id, 
+                      chat_res.answer, 
+                      intent=chat_res.intent, 
+                      state_updates=chat_res.flow_state_updates.model_dump()
+                  )
+             else:
+                  conversation_memory.add_assistant_message(session_id, chat_res.answer, intent=chat_res.intent)
+
+             return chat_res
 
         # --- DETERMINISTIC FAST PATH REMOVED (V18 Fix) ---
         # We removed the early-return for broad topics ("programming") to ensure successful retrieval.
@@ -678,8 +675,7 @@ async def chat(request: ChatRequest):
             mock_skills = SkillValidationResult(validated_skills=session_state.get("last_skills", []))
             
             # Bypass ResponseBuilder complex logic if possible, or use it with minimal context
-            # We use response_builder but with a specific "FOLLOW_UP" mode implicity through the intent
-            answer, projects, selected, skills, plan, dash, all_rel, cat_b, mode, f_q, ref_intent, _ = await response_builder.build(
+            chat_res = await response_builder.build(
                 intent_result=intent_result,
                 courses=courses,
                 skill_result=mock_skills,
@@ -688,26 +684,21 @@ async def chat(request: ChatRequest):
                 semantic_result=mock_semantic
             )
             
-            # Add metadata for eval
-            meta = {
+            chat_res.session_id = session_id
+            chat_res.request_id = request_id
+            chat_res.meta = {
                 "latency_ms": round((time.time() - start_time) * 1000, 2),
-                "follow_up": True,
-                "error": None
+                "follow_up": True
             }
             
-            conversation_memory.add_assistant_message(session_id, answer, intent=IntentType.COURSE_SEARCH.value, state_updates=state_updates)
-            return ChatResponse(
-                session_id=session_id,
-                intent=IntentType.COURSE_SEARCH,
-                answer=answer,
-                courses=selected,
-                all_relevant_courses=all_rel,
-                skill_groups=skills,
-                request_id=request_id,
-                ask=f_q if isinstance(f_q, ChoiceQuestion) else None,
-                followup_question=f_q if isinstance(f_q, str) else None,
-                meta=meta
-            )
+            if chat_res.flow_state_updates:
+                 state_upd = chat_res.flow_state_updates.model_dump()
+                 state_upd.update(state_updates) # Merge pagination offset
+            else:
+                 state_upd = state_updates
+
+            conversation_memory.add_assistant_message(session_id, chat_res.answer, intent=IntentType.COURSE_SEARCH.value, state_updates=state_upd)
+            return chat_res
 
         # Step 2: Semantic Layer (Deep Understanding)
         previous_topic = session_state.get("last_role") or session_state.get("last_topic")
@@ -848,7 +839,7 @@ async def chat(request: ChatRequest):
                     return out[:12]
             return default
 
-        raw_builder_output = await response_builder.build(
+        chat_res = await response_builder.build(
             intent_result=intent_result,
             courses=filtered_courses,
             skill_result=skill_result,
@@ -856,19 +847,12 @@ async def chat(request: ChatRequest):
             context=session_state,
             semantic_result=semantic_result
         )
+
+        # Step 7: Final Metadata and Memory Update
+        chat_res.session_id = session_id
+        chat_res.request_id = request_id
         
-        build_result = normalize_builder_output(raw_builder_output)
-        answer, projects, selected_courses, skill_groups, learning_plan, dashboard, all_rel, catalog_browsing, mode, f_question, refined_intent, flow_state_updates = build_result
-        
-        # V3: Consistency Check (Anti-Hallucination)
-        if selected_courses:
-            is_consistent, inconsistencies = consistency_checker.check(answer, selected_courses)
-            if not is_consistent:
-                logger.warning(f"[{request_id}] Consistency Check Failed: {inconsistencies}")
-                # We could regenerate, but for now we just log.
-        
-        # Step 7: Update Memory
-        # Extract skills to persist context
+        # Capture context for memory
         new_skills = skill_result.validated_skills
         if new_skills:
             state_updates["last_skills"] = new_skills
@@ -876,92 +860,24 @@ async def chat(request: ChatRequest):
         if intent_result.role:
             state_updates["last_role"] = intent_result.role
 
-        if intent_result.intent == IntentType.COURSE_DETAILS:
-             if hasattr(intent_result, 'specific_course'):
-                 state_updates["last_course_viewed"] = intent_result.specific_course
-
-        # V16: Persist topic key for semantic search consistency
-        if semantic_result.primary_domain:
-             state_updates["topic_key"] = semantic_result.primary_domain
+        final_updates = state_updates.copy()
+        if chat_res.flow_state_updates:
+             final_updates.update(chat_res.flow_state_updates.model_dump())
              
-        # V18: Persist context for FOLLOW_UP requirements
-        # Save last search parameters if we found courses
-        if intent_result.intent == IntentType.COURSE_SEARCH and selected_courses:
-             state_updates["last_topic"] = intent_result.specific_course or intent_result.slots.get("topic") or semantic_result.primary_domain
-             state_updates["last_query"] = request.message
-             logger.info(f"[{request_id}] Persisted search context: {state_updates['last_topic']}")
-
-        # Helper to merge updates
-        final_updates = state_updates.copy() if state_updates else {}
-        if flow_state_updates: final_updates.update(flow_state_updates)
-        
         conversation_memory.add_assistant_message(
             session_id,
-            answer,
-            intent=refined_intent or intent_result.intent.value,
+            chat_res.answer,
+            intent=chat_res.intent,
             skills=new_skills,
             state_updates=final_updates
         )
-        
-        
-        process_time = (time.time() - start_time) * 1000
-        logger.info(f"[{request_id}] Request completed in {process_time:.2f}ms")
-        
-        # FOLLOW_UP Normalization: API always returns COURSE_SEARCH for follow-up queries
-        # This ensures UI stability while preserving internal context
-        response_intent = refined_intent or intent_result.intent
-        is_follow_up = (response_intent == IntentType.FOLLOW_UP)
-        if response_intent == IntentType.FOLLOW_UP:
-            response_intent = IntentType.COURSE_SEARCH
-            logger.info(f"[{request_id}] Normalized FOLLOW_UP -> COURSE_SEARCH in response")
-        
-        # Metadata construction
-        meta = {
-            "latency_ms": round(process_time, 2),
-            "follow_up": is_follow_up,
-            "error": None
+
+        chat_res.meta = {
+            "latency_ms": round((time.time() - start_time) * 1000, 2),
+            "flow": "v2_full_pipeline"
         }
 
-        # Language Lock (Rule 0)
-        is_ar = data_loader.is_arabic(request.message)
-        lang = "ar" if is_ar else "en"
-
-        # Map f_question to ask (Rule 7)
-        ask_obj = None
-        if isinstance(f_question, ChoiceQuestion):
-            ask_obj = f_question
-        elif isinstance(f_question, str) and f_question:
-            ask_obj = ChoiceQuestion(question=f_question, choices=[])
-
-        # Map flow_state_updates (Rule 2 & 7)
-        fsu = None
-        if flow_state_updates:
-            fsu = FlowStateUpdates(
-                active_flow=flow_state_updates.get("active_flow"),
-                topic=flow_state_updates.get("topic") or flow_state_updates.get("last_topic") or flow_state_updates.get("exploration", {}).get("domain"),
-                track=flow_state_updates.get("track") or flow_state_updates.get("last_role"),
-                duration=flow_state_updates.get("duration") or flow_state_updates.get("exploration", {}).get("time"),
-                time_per_day=flow_state_updates.get("time_per_day") or flow_state_updates.get("exploration", {}).get("time_per_day"),
-                exploration=flow_state_updates.get("exploration")
-            )
-
-        return ChatResponse(
-            session_id=session_id,
-            request_id=request_id,
-            intent=response_intent,
-            language=lang,
-            answer=answer,
-            ask=ask_obj,
-            courses=selected_courses,
-            projects=projects,
-            learning_plan=learning_plan,
-            flow_state_updates=fsu,
-            all_relevant_courses=all_rel,
-            skill_groups=skill_groups,
-            catalog_browsing=catalog_browsing,
-            dashboard=dashboard,
-            meta=meta
-        )
+        return chat_res
 
     except Exception as e:
         logger.error(f"[{request_id}] Pipeline Error: {e}", exc_info=True)
@@ -978,3 +894,25 @@ async def chat(request: ChatRequest):
         )
 
 # Run with: uvicorn main:app --reload
+
+@app.get("/courses/{course_id}", response_model=CourseDetail)
+def get_course_details(course_id: str):
+    """
+    Fetch full details for a specific course by ID.
+    """
+    c = data_loader.get_course_by_id(course_id)
+    if not c:
+        raise HTTPException(status_code=404, detail="Course not found")
+    
+    return CourseDetail(
+        course_id=str(c.get("course_id", "")),
+        title=c.get("title", ""),
+        category=c.get("category"),
+        level=c.get("level"),
+        instructor=c.get("instructor"),
+        duration_hours=c.get("duration_hours"),
+        description_short=c.get("description_short"),
+        description_full=c.get("description_full") or c.get("description"),
+        cover=c.get("cover"),
+    )
+

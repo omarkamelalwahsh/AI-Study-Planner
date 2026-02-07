@@ -12,11 +12,16 @@ interface Course {
 
 interface CourseCardProps {
     course: Course;
+    onClick?: (course: Course) => void;
 }
 
-export default function CourseCard({ course }: CourseCardProps) {
+export default function CourseCard({ course, onClick }: CourseCardProps) {
     return (
-        <div className="course-card">
+        <div
+            className="course-card cursor-pointer hover:border-indigo-500/50 transition-all active:scale-[0.98]"
+            onClick={() => onClick?.(course)}
+        >
+
             <div className="course-header">
                 <h3 className="course-title">{course.title}</h3>
                 {course.level && typeof course.level === 'string' && (

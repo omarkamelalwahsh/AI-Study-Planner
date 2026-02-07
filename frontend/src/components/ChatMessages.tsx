@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Bot, User as UserIcon, Sparkles } from 'lucide-react';
 import { Message } from '@/types/chat';
 import { ChoicesPanel, CourseCard, PlanAccordion } from '@/components/ChatUI';
+import { CVDashboard } from '@/components/CVDashboard';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -151,6 +152,15 @@ function MessageBubble({
                             {msg.data.learning_plan && (
                                 <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 delay-100">
                                     <PlanAccordion plan={msg.data.learning_plan} />
+                                </div>
+                            )}
+
+                            {/* CV Dashboard */}
+                            {msg.data.dashboard && (
+                                <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
+                                    <div className="mt-4">
+                                        <CVDashboard data={msg.data.dashboard} />
+                                    </div>
                                 </div>
                             )}
                         </div>

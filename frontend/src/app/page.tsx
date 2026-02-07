@@ -21,6 +21,25 @@ export default function ChatPage() {
     const [isLoading, setIsLoading] = useState(false);
     const [sessionId, setSessionId] = useState(`session_${Date.now()}`);
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+    const [sessions, setSessions] = useState<any[]>([]);
+
+    // --- Persistence ---
+    React.useEffect(() => {
+        const raw = localStorage.getItem("cc_sessions");
+        if (raw) setSessions(JSON.parse(raw));
+    }, []);
+
+    const persistSessions = (next: any[]) => {
+        setSessions(next);
+        localStorage.setItem("cc_sessions", JSON.stringify(next));
+    };
+
+    const updateCurrentSession = (newMsgs: Message[]) => {
+        const title = newMsgs.find(m => m.type === 'user')?.content?.slice(0, 30) || "محادثة جديدة";
+        const updated = { id: sessionId, title, messages: newMsgs, updatedAt: Date.now() };
+        const rest = sessions.filter(s => s.id !== sessionId);
+        persistSessions([updated, ...rest].slice(0, 20));
+    };
 
     // --- Actions ---
 
@@ -60,10 +79,53 @@ export default function ChatPage() {
                 timestamp: new Date(),
                 data: data
             };
-            setMessages(prev => [...prev, botMsg]);
+            const nextMsgs = [...messages, userMsg, botMsg];
+            setMessages(nextMsgs);
+            updateCurrentSession(nextMsgs);
         } catch (error) {
             console.error(error);
             toast.error("حصلت مشكلة بسيطة... ياريت تجرب تاني");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleUploadCV = async (file: File) => {
+        if (isLoading) return;
+
+        const userMsg: Message = {
+            id: Date.now().toString(),
+            type: 'user',
+            content: `📄 رفع CV: ${file.name}`,
+            timestamp: new Date()
+        };
+
+        setMessages(prev => [...prev, userMsg]);
+        setIsLoading(true);
+
+        try {
+            const fd = new FormData();
+            fd.append("file", file);
+            fd.append("session_id", sessionId);
+
+            const res = await fetch("/api/upload-cv", { method: "POST", body: fd });
+            if (!res.ok) throw new Error("Upload failed");
+            const data: ChatResponse = await res.json();
+
+            const botMsg: Message = {
+                id: (Date.now() + 1).toString(),
+                type: 'bot',
+                content: data.answer || "تم رفع الـ CV بنجاح.",
+                timestamp: new Date(),
+                data
+            };
+
+            const nextMsgs = [...messages, userMsg, botMsg];
+            setMessages(nextMsgs);
+            updateCurrentSession(nextMsgs);
+        } catch (e) {
+            console.error(e);
+            toast.error("حصلت مشكلة في رفع الـ CV");
         } finally {
             setIsLoading(false);
         }
@@ -75,6 +137,20 @@ export default function ChatPage() {
         toast.success("بدأت محادثة جديدة");
     };
 
+    const openSession = (id: string) => {
+        const s = sessions.find(x => x.id === id);
+        if (!s) return;
+        setSessionId(s.id);
+        setMessages(s.messages);
+        if (window.innerWidth < 1024) setIsSidebarOpen(false);
+    };
+
+    const deleteSession = (id: string) => {
+        const next = sessions.filter(x => x.id !== id);
+        persistSessions(next);
+        if (sessionId === id) startNewChat();
+    };
+
     // --- Render Logic ---
     const showHero = messages.length === 0;
 
@@ -84,6 +160,9 @@ export default function ChatPage() {
             <Sidebar
                 isOpen={isSidebarOpen}
                 onNewChat={startNewChat}
+                sessions={sessions.map(s => ({ id: s.id, title: s.title }))}
+                onOpenSession={openSession}
+                onDeleteSession={deleteSession}
             />
 
             {/* 2. Main Content Column */}
@@ -146,7 +225,8 @@ export default function ChatPage() {
                 <ChatInput
                     value={input}
                     onChange={setInput}
-                    onSend={() => handleSend()}
+                    onSend={(t) => handleSend(t)}
+                    onUploadCV={handleUploadCV}
                     isLoading={isLoading}
                 />
             </main>

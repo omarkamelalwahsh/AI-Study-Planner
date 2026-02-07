@@ -7,6 +7,23 @@ from pydantic import BaseModel, Field
 from enum import Enum
 
 
+class Card(BaseModel):
+    type: str  # roadmap | skills | courses | assessment | cv_summary | next_steps | notes
+    heading: str
+    bullets: List[str]
+
+class RadarItem(BaseModel):
+    area: str
+    value: int
+
+class Action(BaseModel):
+    type: str = "OPEN_COURSE_DETAILS"
+    course_id: str
+
+class OneQuestion(BaseModel):
+    question: str
+    choices: List[str]
+
 class IntentType(str, Enum):
     COURSE_SEARCH = "COURSE_SEARCH"
     CAREER_GUIDANCE = "CAREER_GUIDANCE"
@@ -19,6 +36,8 @@ class IntentType(str, Enum):
     EXPLORATION_FOLLOWUP = "EXPLORATION_FOLLOWUP"
     CV_ANALYSIS = "CV_ANALYSIS" # Internal use for uploads
     PROJECT_IDEAS = "PROJECT_IDEAS" # Internal mapping for projects
+    COURSE_DETAILS = "COURSE_DETAILS" # Added for Honesty Guard
+    TRACK_START = "TRACK_START"
 
 
 class ChatRequest(BaseModel):
@@ -42,7 +61,8 @@ class CourseDetail(BaseModel):
     fit: Optional[str] = None
     why_recommended: Optional[str] = None
     cover: Optional[str] = None
-    linked_skill_keys: List[str] = [] # V12 Popover Mapping
+    linked_skill_keys: List[str] = Field(default_factory=list) # V12 Popover Mapping
+    action: Optional[Action] = None # Strict UI Action
 
 
 # Legacy support classes kept but decoupled from main response models
@@ -154,7 +174,7 @@ class CVDashboard(BaseModel):
     score: dict = Field(default_factory=dict) # {overall, skills, experience, projects, marketReadiness}
     roleFit: dict = Field(default_factory=dict) # {detectedRoles, direction, summary}
     skills: CVSkills = Field(default_factory=CVSkills)
-    radar: List[dict] = Field(default_factory=list) # [{area, value}]
+    radar: List[RadarItem] = Field(default_factory=list) # [{area, value}]
     projects: List[dict] = Field(default_factory=list) # [{title, level, description, skills}]
     atsChecklist: List[dict] = Field(default_factory=list) # [{id, text, done}]
     notes: dict = Field(default_factory=dict) # {strengths, gaps}
@@ -215,27 +235,29 @@ class FlowStateUpdates(BaseModel):
 
 
 class ChatResponse(BaseModel):
-    """Strict JSON Output Contract for Career Copilot"""
-    intent: IntentType
-    language: str = "ar"
+    """Strict JSON Output Contract for Career Copilot (New Schema)"""
+    intent: str
+    language: str
+    title: str
     answer: str
-    ask: Optional[ChoiceQuestion] = None
-    learning_plan: Optional[LearningPlan] = None
+    cards: List[Card] = Field(default_factory=list)
+    radar: List[RadarItem] = Field(default_factory=list) # Top-level radar for CV Analysis
     courses: List[CourseDetail] = Field(default_factory=list)
-    projects: List[ProjectDetail] = Field(default_factory=list)
-    flow_state_updates: Optional[FlowStateUpdates] = None
+    one_question: Optional[OneQuestion] = None
     
-    # Metadata for internal tracking (not necessarily in final UI contract but useful for API)
+    # Metadata and State tracking (Internal/Backend use)
     session_id: Optional[str] = None
     request_id: Optional[str] = None
+    flow_state_updates: Optional[FlowStateUpdates] = None
     meta: Dict[str, Any] = Field(default_factory=dict)
     
-    # Legacy/Extended fields (optional)
+    # Legacy/Extended fields (kept for backward compatibility during transition)
+    learning_plan: Optional[LearningPlan] = None
+    projects: List[ProjectDetail] = Field(default_factory=list)
     all_relevant_courses: List[CourseDetail] = Field(default_factory=list)
     skill_groups: List[SkillGroup] = Field(default_factory=list)
     catalog_browsing: Optional[CatalogBrowsingData] = None
     dashboard: Optional[CVDashboard] = None
     error: Optional[ErrorDetail] = None
-    followup_question: Optional[str] = None 
 
  

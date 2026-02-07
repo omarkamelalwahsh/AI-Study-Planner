@@ -186,6 +186,12 @@ class DataLoader:
             raise FileNotFoundError(f"Courses file not found: {COURSES_CSV}")
         
         self.courses_df = pd.read_csv(COURSES_CSV)
+        
+        # SECURITY FIX: Remove logic-exposed JWT tokens from URLs
+        if 'cover' in self.courses_df.columns:
+            # Remove everything starting from '?token=' to the end of the string
+            self.courses_df['cover'] = self.courses_df['cover'].astype(str).str.replace(r'\?token=.*', '', regex=True)
+            
         logger.info(f"Loaded {len(self.courses_df)} courses")
     
     @staticmethod

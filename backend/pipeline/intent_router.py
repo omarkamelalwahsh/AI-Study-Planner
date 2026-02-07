@@ -10,33 +10,23 @@ from models import IntentType, IntentResult
 
 logger = logging.getLogger(__name__)
 
-INTENT_SYSTEM_PROMPT = """SYSTEM: Career Copilot — Intent Router (Hard Rules)
+INTENT_SYSTEM_PROMPT = """SYSTEM: Career Copilot — Intent Router (Strict Routing v2)
 
 Output exactly one intent from:
-EXPLORATION, EXPLORATION_FOLLOWUP, CATALOG_BROWSING, COURSE_SEARCH, LEARNING_PATH, CAREER_GUIDANCE, FOLLOW_UP, GENERAL_QA, SAFE_FALLBACK
+TRACK_START, COURSE_SEARCH, CAREER_GUIDANCE, CV_ANALYSIS, GENERAL_QA, FOLLOW_UP, ERROR
 
-PATCH — Intent Router Disambiguation (CAREER_GUIDANCE vs PROJECT_IDEAS)
-
-A) CAREER_GUIDANCE MUST trigger when the user asks "how to become / be / improve as" a role or skill.
-Examples: "ازاي ابقى مدير ناجح؟", "How to become a Product Owner?", "career pathway", "salary for X".
-
-B) COURSE_SEARCH (Primary):
-If user says: "عاوز اتعلم / ذاكر / learn / study + <topic>" (e.g., "عاوز اتعلم SQL") or "رشحلي كورسات".
-
-C) LEARNING_PATH:
-- Intent "LEARNING_PATH" triggers: "خطة", "plan", "roadmap", "جدول مذاكرة".
-
-D) EXPLORATION:
-- Triggers when user is unsure: "مش عارف", "تايه", "محتار", "ساعدني", "مش عارف اختار", "I don't know", "help me choose".
+HARD RULES:
+1) If user message includes a clear track/topic (e.g., Marketing, Programming, Data Science) AND user is "lost/تايه" or beginner -> TRACK_START.
+2) If user message includes a career goal/role (e.g., "مدير عام", "Sales Manager") -> CAREER_GUIDANCE.
+3) If user asks for courses or says "عاوز اتعلم <Topic>" -> COURSE_SEARCH.
 
 Output JSON schema:
 {
-  "intent": "EXPLORATION|EXPLORATION_FOLLOWUP|CATALOG_BROWSING|COURSE_SEARCH|LEARNING_PATH|CAREER_GUIDANCE|FOLLOW_UP|GENERAL_QA|SAFE_FALLBACK",
+  "intent": "TRACK_START|COURSE_SEARCH|CAREER_GUIDANCE|CV_ANALYSIS|GENERAL_QA|FOLLOW_UP|ERROR",
   "confidence": 0.0-1.0,
   "reason": "short",
-  "slots": {"topic": "Extract EXACT user topic", "role": "...", "level": "..."}
+  "slots": {"topic": "...", "role": "...", "level": "..."}
 }
-
 Return JSON only. No extra text."""
 
 
@@ -104,64 +94,61 @@ class IntentRouter:
         return await self.classify(message, context=context)
 
     def _check_manual_overrides(self, message: str) -> Optional[IntentResult]:
-        """Strict keyword overrides for production determinism (Unified Prompt v1)."""
+        """Strict keyword overrides for production determinism (v2)."""
         msg = message.strip().lower()
         
-        # EXPLORATION (User unsure - Unified Prompt v1.0)
-        exploration_kws = [
-            "مش عارف", "تايه", "محتار", "ساعدني", "مش عارف اختار", "مش عارف أختار",
-            "I don't know", "help me choose", "أبدأ منين", "ابدأ منين"
-        ]
-        if any(kw in msg for kw in exploration_kws):
-            return IntentResult(intent=IntentType.EXPLORATION, confidence=1.0, needs_explanation=True)
-        
-        # MAIN DOMAINS -> IMMEDIATE COURSE_SEARCH (Rule B)
-        # ["Programming", "Data Science", "Marketing", "Business", "Design"]
-        main_domains = ["programming", "data science", "marketing", "business", "design"]
-        for domain in main_domains:
-            # Check for exact word or part of sentence
-            if domain in msg:
-                return IntentResult(
-                    intent=IntentType.COURSE_SEARCH,
-                    confidence=1.0,
-                    topic=domain.title(),
-                    needs_courses=True,
-                    needs_explanation=True
-                )
-        
-        # CATALOG_BROWSING
-        catalog_kws = ["ايه الكورسات", "المتاحة", "كتالوج", "browse", "catalog", "categories", "أقسام", "مجالات", "تخصصات", "ايه المتاح"]
-        if any(kw in msg for kw in catalog_kws):
-            return IntentResult(intent=IntentType.CATALOG_BROWSING, confidence=1.0, needs_explanation=True)
-
-        # Exact Category Recognition -> COURSE_SEARCH
+        # 1. Detect Domain/Track (Marketing, Python, Databases, Data Science, Business, Design, Programming)
         from data_loader import data_loader
         all_cats = [c.lower() for c in data_loader.get_all_categories()]
-        for cat in all_cats:
-            if cat in msg and len(cat) > 3:
-                return IntentResult(
-                    intent=IntentType.COURSE_SEARCH,
-                    confidence=1.0,
-                    topic=cat,
-                    needs_courses=True,
-                    needs_explanation=True
-                )
+        main_domains = ["programming", "data science", "marketing", "business", "design", "development", "python", "databases"]
+        
+        detected_domain = None
+        for domain in main_domains:
+            if domain in msg:
+                detected_domain = domain.title()
+                break
+        
+        if not detected_domain:
+            for cat in all_cats:
+                if cat in msg and len(cat) > 3:
+                    detected_domain = cat
+                    break
 
-        # Manager Roles -> CAREER_GUIDANCE
-        if any(kw in msg for kw in ["مدير", "manager", "team lead", "engineering manager"]):
+        # 2. Lost / Unsure Keywords
+        is_lost = any(kw in msg for kw in ["مش عارف", "تايه", "محتار", "ساعدني", "don't know", "help", "ابدأ منين"])
+
+        # 3. Rule B.1: Track + Lost -> TRACK_START (Override ASK_CATEGORY/EXPLORATION)
+        if detected_domain and is_lost:
+            return IntentResult(
+                intent=IntentType.TRACK_START,
+                topic=detected_domain,
+                confidence=1.0,
+                needs_explanation=True,
+                slots={"topic": detected_domain}
+            )
+
+        # 4. Rule B.2: Career Goal/Role -> CAREER_GUIDANCE
+        roles_kws = ["مدير", "manager", "lead", "head of", "director", "قائد", "رئيس", "senior", "specialist"]
+        if any(kw in msg for kw in roles_kws):
             return IntentResult(
                 intent=IntentType.CAREER_GUIDANCE,
                 confidence=1.0,
                 needs_courses=True,
-                needs_explanation=True
+                needs_explanation=True,
+                slots={"role": msg} # Capture the role from message
             )
 
-        # LEARNING_PATH
-        if any(kw in msg for kw in ["خطة", "مسار", "roadmap", "path", "plan"]):
-            return IntentResult(intent=IntentType.LEARNING_PATH, confidence=1.0, needs_courses=True, needs_explanation=True)
-            
-        # FOLLOW_UP
-        if any(kw in msg for kw in ["غيرهم", "كمان", "more", "next", "المزيد"]):
-            return IntentResult(intent=IntentType.FOLLOW_UP, confidence=1.0)
+        # 5. Rule B.1 (Search Path): Track explicitly mentioned -> COURSE_SEARCH
+        # BUT ONLY if not lost (caught above)
+        if detected_domain:
+            return IntentResult(
+                intent=IntentType.COURSE_SEARCH,
+                topic=detected_domain,
+                confidence=1.0,
+                needs_courses=True,
+                needs_explanation=True,
+                slots={"topic": detected_domain}
+            )
 
+        # Default: No override
         return None

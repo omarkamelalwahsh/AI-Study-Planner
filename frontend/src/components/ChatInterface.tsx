@@ -1,16 +1,24 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { sendMessage, uploadCV } from '../services/api'
 import { useStore } from '../store/store'
+import ChatInput from './ChatInput'
 import CourseCard from './CourseCard'
 import MessageBubble from './MessageBubble'
+
 import SkillGroupCard from './SkillGroupCard'
 
 import { CVDashboard } from './CVDashboard'
+import { CourseModal } from './CourseModal'
+import { fetchCourseDetails } from '../services/api' // I might need to add this to api.ts
+
 
 interface Message {
     id: string;
     role: 'user' | 'assistant';
     content: string;
+    title?: string;
+    cards?: any[];
+    one_question?: any;
     courses?: any[];
     all_relevant_courses?: any[];
     projects?: any[];
@@ -44,6 +52,11 @@ export default function ChatInterface() {
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const inputRef = useRef<HTMLTextAreaElement>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
+
+    // Modal State
+    const [selectedCourse, setSelectedCourse] = useState<any | null>(null)
+    const [isModalOpen, setIsModalOpen] = useState(false)
+
 
     // Load sessions from localStorage on mount
     useEffect(() => {
@@ -103,7 +116,58 @@ export default function ChatInterface() {
         return () => clearInterval(interval)
     }, [])
 
+    const handleCourseClick = async (course: any) => {
+        // If we don't have full details, fetch them
+        if (!course.description_full) {
+            try {
+                const fullDetails = await fetchCourseDetails(course.course_id);
+                setSelectedCourse(fullDetails);
+            } catch (e) {
+                console.error("Failed to fetch course details", e);
+                setSelectedCourse(course);
+            }
+        } else {
+            setSelectedCourse(course);
+        }
+        setIsModalOpen(true);
+    };
+
+    const handleBotReply = (response: any) => {
+        if (!sessionId && response.session_id) {
+            setSessionId(response.session_id);
+        }
+
+        const assistantMessage: any = {
+            role: 'assistant',
+            content: response.answer,
+            title: response.title,
+            cards: response.cards || [],
+            one_question: response.one_question || null,
+            courses: response.courses || [],
+            all_relevant_courses: response.all_relevant_courses || [],
+            projects: response.projects || [],
+            skill_groups: response.skill_groups || [],
+            catalog_browsing: response.catalog_browsing || null,
+            learning_plan: response.learning_plan || null,
+            dashboard: response.dashboard || null,
+            intent: response.intent,
+            ask: response.ask || null,
+        };
+
+        addMessage(assistantMessage);
+    };
+
+    const handleUploadStart = (fileName: string) => {
+        const userMsg = {
+            role: 'user',
+            content: `📄 Uploading CV: ${fileName}...`
+        }
+        addMessage(userMsg as any);
+        setLoading(true);
+    };
+
     const handleSubmit = async (e?: React.FormEvent) => {
+
         if (e) e.preventDefault()
         if (!input.trim() || isLoading) return
 
@@ -128,6 +192,9 @@ export default function ChatInterface() {
             const assistantMessage: any = {
                 role: 'assistant',
                 content: response.answer,
+                title: response.title,
+                cards: response.cards || [],
+                one_question: response.one_question || null,
                 courses: response.courses || [],
                 all_relevant_courses: response.all_relevant_courses || [],
                 projects: response.projects || [],
@@ -326,7 +393,72 @@ export default function ChatInterface() {
                     <div key={msg.id} className="message-container">
                         <MessageBubble message={msg} />
 
-                        {/* NEW: Render Choice Questions (e.g. Exploration Flow) */}
+                        {/* NEW: Render Cards (Strict Schema v2) */}
+                        {msg.cards && msg.cards.length > 0 && (
+                            <div className="cards-container space-y-4 my-4" style={{ marginLeft: '60px' }}>
+                                {msg.cards.map((card: any, idx: number) => (
+                                    <div key={idx} className="card-item p-4 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
+                                        <h4 className="text-blue-400 font-bold mb-2 flex items-center gap-2">
+                                            {card.type === 'roadmap' && '🗺️'}
+                                            {card.type === 'skills' && '📊'}
+                                            {card.type === 'summary' && '📝'}
+                                            {card.type === 'info' && 'ℹ️'}
+                                            {card.title}
+                                        </h4>
+                                        {card.content && <p className="text-gray-300 text-sm mb-3">{card.content}</p>}
+
+                                        {card.items && (
+                                            <ul className="space-y-1">
+                                                {card.items.map((item: string, i: number) => (
+                                                    <li key={i} className="text-sm text-gray-400 flex items-start gap-2">
+                                                        <span className="text-blue-500 mt-1">•</span>
+                                                        {item}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        )}
+
+                                        {card.steps && (
+                                            <div className="space-y-3 mt-2">
+                                                {card.steps.map((step: any, i: number) => (
+                                                    <div key={i} className="flex gap-3">
+                                                        <div className="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-xs shrink-0 mt-0.5">
+                                                            {i + 1}
+                                                        </div>
+                                                        <div>
+                                                            <div className="text-sm font-medium text-white">{step.title}</div>
+                                                            <div className="text-xs text-gray-400">{step.desc}</div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* NEW: Render OneQuestion (Strict Schema v2) */}
+                        {msg.one_question && (
+                            <div className="one-question-container space-y-3 my-4" style={{ marginLeft: '60px' }}>
+                                <div className="text-sm text-gray-400 font-medium italic">
+                                    {msg.one_question.question}
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                    {msg.one_question.choices.map((choice: string, idx: number) => (
+                                        <button
+                                            key={idx}
+                                            className="px-4 py-2 rounded-full border border-blue-500/50 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 transition-all text-sm"
+                                            onClick={() => setInput(choice)}
+                                        >
+                                            {choice}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Legacy Handlers (Keeping for compatibility) */}
                         {msg.ask && msg.ask.choices && msg.ask.choices.length > 0 && (
                             <div className="choice-questions-container" style={{ margin: '12px 0 12px 60px' }}>
                                 <div style={{ marginBottom: '8px', color: '#94a3b8', fontSize: '0.9rem' }}>
@@ -412,8 +544,9 @@ export default function ChatInterface() {
                                 </h3>
                                 <div className="courses-grid" style={{ marginBottom: '16px' }}>
                                     {msg.courses.map((course: any) => (
-                                        <CourseCard key={course.course_id} course={course} />
+                                        <CourseCard key={course.course_id} course={course} onClick={handleCourseClick} />
                                     ))}
+
                                 </div>
                             </div>
                         )}
@@ -423,8 +556,9 @@ export default function ChatInterface() {
                                 <h3 style={{ fontSize: '1.1rem', color: '#94a3b8' }}>📚 نتائج إضافية ذات صلة:</h3>
                                 <div className="courses-grid">
                                     {(msg.all_relevant_courses || []).slice(0, 5).map((course: any) => (
-                                        <CourseCard key={course.course_id} course={course} />
+                                        <CourseCard key={course.course_id} course={course} onClick={handleCourseClick} />
                                     ))}
+
                                 </div>
                                 {msg.all_relevant_courses.length > 5 && (
                                     <button
@@ -517,29 +651,24 @@ export default function ChatInterface() {
                 <div ref={messagesEndRef} />
             </div>
 
-            <form className="chat-input-form" onSubmit={handleSubmit}>
-                <textarea
-                    ref={inputRef}
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder="اكتب سؤالك هنا... (Enter للإرسال)"
-                    disabled={isLoading}
-                    rows={1}
+            <ChatInput
+                value={input}
+                onChange={setInput}
+                onSend={handleSubmit}
+                isLoading={isLoading}
+                sessionId={sessionId}
+                onBotReply={handleBotReply}
+                onUploadStart={handleUploadStart}
+            />
+
+            {/* Course Modal */}
+            {isModalOpen && selectedCourse && (
+                <CourseModal
+                    course={selectedCourse}
+                    onClose={() => setIsModalOpen(false)}
                 />
-                <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleFileSelect}
-                    style={{ display: 'none' }}
-                />
-                <button type="button" className="upload-btn" onClick={triggerFileUpload} disabled={isLoading}>
-                    📎
-                </button>
-                <button type="submit" disabled={isLoading || !input.trim()}>
-                    {isLoading ? '...' : 'Send'}
-                </button>
-            </form>
+            )}
         </div>
+
     )
 }

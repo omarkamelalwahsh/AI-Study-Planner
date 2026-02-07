@@ -36,6 +36,11 @@ export interface ChatResponse {
     courses: Course[];
     learning_plan: LearningPlan | null;
     projects: any[];
+    one_question?: {
+        question: string;
+        choices: string[];
+    };
+    dashboard?: any; // Rich CV dashboard data
 }
 
 export interface Message {

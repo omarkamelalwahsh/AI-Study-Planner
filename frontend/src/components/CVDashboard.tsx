@@ -1,431 +1,276 @@
+"use client";
+
 import React, { useMemo, useState } from "react";
-import styled from "styled-components";
-// Removed unused imports
 import {
     BarChart3,
     Sparkles,
     Target,
     CheckCircle2,
     AlertTriangle,
+    User,
+    Briefcase,
+    Trophy,
+    FileText,
+    TrendingUp,
+    Check
 } from "lucide-react";
-import {
-    ResponsiveContainer,
-    RadarChart,
-    PolarGrid,
-    PolarAngleAxis,
-    Radar,
-    Tooltip,
-    BarChart,
-    CartesianGrid,
-    XAxis,
-    YAxis,
-    Bar,
-} from "recharts";
 
-// --- Styled Components (Shim for shadcn/ui) ---
+/** 
+ * A premium, dependency-free dashboard component using Tailwind CSS.
+ * Replaces the previous version that had recharts/styled-components dependencies.
+ */
 
-const DashboardContainer = styled.div`
-  min-height: 100vh;
-  background: #0f111a;
-  color: #fff;
-  font-family: 'Inter', sans-serif;
-  direction: ltr; /* Dashboard is technical, keep LTR usually, or RTL if needed */
-`;
+// --- Simplified Card Components ---
 
-const TopBar = styled.div`
-  position: sticky;
-  top: 0;
-  z-index: 50;
-  border-bottom: 1px solid rgba(255,255,255,0.1);
-  background: rgba(15, 17, 26, 0.85);
-  backdrop-filter: blur(10px);
-  padding: 1rem;
-`;
+const Card = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
+    <div className={`bg-[#1a1d2d] border border-white/5 rounded-2xl overflow-hidden shadow-xl ${className}`}>
+        {children}
+    </div>
+);
 
-const TopBarContent = styled.div`
-  max-width: 1200px;
-  margin: 0 auto;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-`;
+const CardHeader = ({ title, description, icon: Icon, iconColor = "text-blue-400" }: { title: string; description?: string; icon?: any; iconColor?: string }) => (
+    <div className="p-5 border-b border-white/5">
+        <div className="flex items-center gap-3">
+            {Icon && (
+                <div className={`p-2 bg-white/5 rounded-lg ${iconColor}`}>
+                    <Icon size={18} />
+                </div>
+            )}
+            <div>
+                <h3 className="text-white font-semibold text-base">{title}</h3>
+                {description && <p className="text-slate-400 text-xs mt-0.5">{description}</p>}
+            </div>
+        </div>
+    </div>
+);
 
-const LogoSection = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 12px;
-`;
+const CardContent = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
+    <div className={`p-5 ${className}`}>
+        {children}
+    </div>
+);
 
-const IconBox = styled.div`
-  padding: 8px;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-`;
+// --- Individual Visual Elements ---
 
-const Card = styled.div`
-  background: #1a1d2d;
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 16px;
-  overflow: hidden;
-`;
+const ScoreBar = ({ label, value, colorClass = "bg-blue-500" }: { label: string; value: number; colorClass?: string }) => (
+    <div className="space-y-1.5">
+        <div className="flex justify-between items-center text-xs">
+            <span className="text-slate-400 font-medium">{label}</span>
+            <span className="text-white font-bold">{value}%</span>
+        </div>
+        <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+            <div
+                className={`h-full transition-all duration-1000 ease-out border-r border-white/10 ${colorClass}`}
+                style={{ width: `${value}%` }}
+            />
+        </div>
+    </div>
+);
 
-const CardHeader = styled.div`
-  padding: 1.5rem 1.5rem 0.5rem;
-`;
-
-const CardContent = styled.div`
-  padding: 1.5rem;
-`;
-
-const CardTitle = styled.h3`
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: #fff;
-  margin: 0;
-`;
-
-const CardDescription = styled.p`
-  font-size: 0.875rem;
-  color: #94a3b8;
-  margin: 4px 0 0;
-`;
-
-const Grid = styled.div`
-  display: grid;
-  gap: 1.5rem;
-  grid-template-columns: 1fr;
-  
-  @media (min-width: 1024px) {
-    grid-template-columns: repeat(3, 1fr);
-  }
-`;
-
-const Badge = styled.span<{ variant?: string }>`
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  font-weight: 500;
-  background: ${props => props.variant === "secondary" ? "rgba(255,255,255,0.1)" : "rgba(139, 92, 246, 0.2)"};
-  color: ${props => props.variant === "secondary" ? "#cbd5e1" : "#a78bfa"};
-  border: 1px solid ${props => props.variant === "secondary" ? "transparent" : "rgba(139, 92, 246, 0.3)"};
-`;
-
-// Removed unused Button styled component
-const Button = styled.button`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 8px 16px;
-  border-radius: 12px;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  background: ${props => props.className?.includes("outline") ? "transparent" : "#3b82f6"};
-  color: ${props => props.className?.includes("outline") ? "#fff" : "#fff"};
-  border: 1px solid ${props => props.className?.includes("outline") ? "rgba(255,255,255,0.2)" : "transparent"};
-
-  &:hover {
-    background: ${props => props.className?.includes("outline") ? "rgba(255,255,255,0.05)" : "#2563eb"};
-  }
-`;
-
-const TabsList = styled.div`
-  display: flex;
-  gap: 8px;
-  background: rgba(255,255,255,0.03);
-  padding: 6px;
-  border-radius: 16px;
-  margin-bottom: 24px;
-`;
-
-const TabTrigger = styled.button<{ active: boolean }>`
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 10px;
-  border-radius: 12px;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  border: none;
-  background: ${props => props.active ? "#2d3748" : "transparent"};
-  color: ${props => props.active ? "#fff" : "#94a3b8"};
-  transition: all 0.2s;
-
-  &:hover {
-    color: #fff;
-  }
-`;
-
-const ScoreRingContainer = styled.div`
-  background: #1e293b;
-  border: 1px solid rgba(255,255,255,0.05);
-  border-radius: 16px;
-  padding: 16px;
-`;
-
-const ProgressBar = styled.div`
-  height: 8px;
-  background: rgba(255,255,255,0.1);
-  border-radius: 4px;
-  overflow: hidden;
-  margin-top: 12px;
-`;
-
-const ProgressFill = styled.div<{ width: number; color: string }>`
-  height: 100%;
-  width: ${props => props.width}%;
-  background-color: ${props => props.color};
-  border-radius: 4px;
-  transition: width 1s ease-out;
-`;
-
-// --- Components ---
-
-function ScoreRing({ label, value }: { label: string; value: number }) {
-    const color = value >= 80 ? "#10b981" : value >= 60 ? "#f59e0b" : "#ef4444";
-    return (
-        <ScoreRingContainer>
-            <div style={{ fontSize: '0.875rem', color: '#94a3b8', marginBottom: '8px' }}>{label}</div>
-            <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#fff' }}>{value}</div>
-            <ProgressBar>
-                <ProgressFill width={value} color={color} />
-            </ProgressBar>
-        </ScoreRingContainer>
-    );
-}
-
-function SkillPill({ name, tone }: { name: string; tone: "strong" | "weak" | "missing" }) {
-    let bg = "rgba(75, 85, 99, 0.2)";
-    let color = "#9ca3af";
-    let border = "transparent";
-
-    if (tone === "strong") {
-        bg = "rgba(16, 185, 129, 0.1)";
-        color = "#34d399";
-        border = "rgba(16, 185, 129, 0.2)";
-    } else if (tone === "weak") {
-        bg = "rgba(245, 158, 11, 0.1)";
-        color = "#fbbf24";
-        border = "rgba(245, 158, 11, 0.2)";
-    } else if (tone === "missing") {
-        bg = "rgba(239, 68, 68, 0.1)";
-        color = "#f87171";
-        border = "rgba(239, 68, 68, 0.2)";
-    }
+const SkillBadge = ({ name, type }: { name: string; type: 'strong' | 'weak' | 'missing' }) => {
+    const styles = {
+        strong: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+        weak: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+        missing: "bg-rose-500/10 text-rose-400 border-rose-500/20"
+    };
 
     return (
-        <span style={{
-            display: "inline-block",
-            padding: "6px 12px",
-            borderRadius: "99px",
-            fontSize: "0.75rem",
-            background: bg,
-            color: color,
-            border: `1px solid ${border}`,
-            marginRight: "6px",
-            marginBottom: "6px"
-        }}>
+        <span className={`px-3 py-1.5 rounded-xl border text-xs font-medium ${styles[type]}`}>
             {name}
         </span>
     );
-}
+};
 
-// --- Main Component ---
+// --- Main Dashboard Component ---
 
 export function CVDashboard({ data }: { data: any }) {
-    const [activeTab, setActiveTab] = useState("skills");
+    const [activeTab, setActiveTab] = useState("overview");
 
-    // Fallback / Demo data mapper
-    // Real Data Mapping
-    const dashboardData = useMemo(() => {
+    const d = useMemo(() => {
         if (!data) return null;
-
-        // Return data directly as it now matches schema from backend
         return {
-            candidate: data.candidate || { name: "Candidate", targetRole: "Unknown", seniority: "Unknown" },
-            score: data.score || { overall: 0, skills: 0, experience: 0, projects: 0, marketReadiness: 0, ats: 0, readiness: 0 },
-            roleFit: data.roleFit || { detectedRoles: [], direction: "Analysis", summary: "No data available." },
+            candidate: data.candidate || { name: "المرشح", targetRole: "غير محدد", seniority: "N/A" },
+            score: data.score || { overall: 0, skills: 0, experience: 0, projects: 0, marketReadiness: 0 },
+            roleFit: data.roleFit || { detectedRoles: [], direction: "", summary: "" },
             skills: data.skills || { strong: [], weak: [], missing: [] },
             radar: data.radar || [],
             projects: data.projects || [],
             atsChecklist: data.atsChecklist || [],
-            notes: data.notes || { strengths: "N/A", gaps: "N/A" },
+            notes: data.notes || { strengths: "", gaps: "" },
             recommendations: data.recommendations || []
         };
     }, [data]);
 
-    const overallColor = (dashboardData?.score?.overall || 0) >= 80 ? "#34d399" : (dashboardData?.score?.overall || 0) >= 60 ? "#fbbf24" : "#f87171";
+    if (!d) return null;
 
-    if (!dashboardData) return null;
+    const overallColor = d.score.overall >= 80 ? "text-emerald-400" : d.score.overall >= 60 ? "text-amber-400" : "text-rose-400";
+    const overallBg = d.score.overall >= 80 ? "bg-emerald-400/20" : d.score.overall >= 60 ? "bg-amber-400/20" : "bg-rose-400/20";
 
     return (
-        <DashboardContainer>
-            <TopBar>
-                <TopBarContent>
-                    <LogoSection>
-                        <IconBox><BarChart3 size={20} color="#3b82f6" /></IconBox>
-                        <div>
-                            <div style={{ fontWeight: 600 }}>CV Analysis Dashboard</div>
-                            <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>AI-Powered Review</div>
+        <div className="w-full max-w-4xl transform transition-all duration-500 animate-in fade-in slide-in-from-bottom-4 mt-4" dir="ltr">
+            {/* Header / Top Bar */}
+            <div className="bg-[#1a1d2d]/80 backdrop-blur-xl border border-white/10 rounded-3xl p-4 mb-6 flex items-center justify-between shadow-2xl">
+                <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
+                        <BarChart3 className="text-white w-6 h-6" />
+                    </div>
+                    <div>
+                        <h2 className="text-white font-bold text-lg">تحليل السيرة الذاتية</h2>
+                        <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                            <span className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">AI Analysis Live</span>
                         </div>
-                    </LogoSection>
-                    <Badge variant="secondary">Beta v1.0</Badge>
-                </TopBarContent>
-            </TopBar>
+                    </div>
+                </div>
+                <div className="flex items-center gap-3">
+                    <div className={`px-4 py-2 rounded-2xl flex items-center gap-2 ${overallBg}`}>
+                        <Sparkles className={`w-4 h-4 ${overallColor}`} />
+                        <span className={`font-bold text-xl ${overallColor}`}>{d.score.overall}</span>
+                    </div>
+                </div>
+            </div>
 
-            <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px' }}>
+            {/* Navigation Tabs */}
+            <div className="flex gap-2 p-1.5 bg-white/5 rounded-2xl mb-6 w-fit border border-white/5">
+                {[
+                    { id: 'overview', label: 'Overview', icon: Target },
+                    { id: 'skills', label: 'Skills & Gaps', icon: Sparkles },
+                    { id: 'projects', label: 'Suggested Projects', icon: Trophy }
+                ].map(tab => (
+                    <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id)}
+                        className={`
+                            flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all
+                            ${activeTab === tab.id
+                                ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
+                                : 'text-slate-400 hover:text-white hover:bg-white/5'}
+                        `}
+                    >
+                        <tab.icon size={16} />
+                        {tab.label}
+                    </button>
+                ))}
+            </div>
 
-                {/* Overview Cards */}
-                <Grid>
-                    <Card style={{ gridColumn: 'span 2' }}>
-                        <CardHeader>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
-                                <div>
-                                    <CardTitle>Analysis Overview</CardTitle>
-                                    <CardDescription>{dashboardData.roleFit.summary}</CardDescription>
-                                </div>
-                                <div style={{ textAlign: 'right' }}>
-                                    <div style={{ fontSize: '3rem', fontWeight: 'bold', color: overallColor, lineHeight: 1 }}>
-                                        {dashboardData.score.overall}
-                                    </div>
-                                    <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Overall Score</div>
-                                </div>
-                            </div>
-                        </CardHeader>
-                        <CardContent>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px' }}>
-                                <ScoreRing label="Skills Match" value={dashboardData.score.skills} />
-                                <ScoreRing label="Experience" value={dashboardData.score.experience} />
-                                <ScoreRing label="ATS Check" value={dashboardData.score.ats} />
-                                <ScoreRing label="Readiness" value={dashboardData.score.readiness} />
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Skill Radar</CardTitle>
-                            <CardDescription>Performance across dimensions</CardDescription>
-                        </CardHeader>
-                        <CardContent style={{ height: '300px' }}>
-                            <ResponsiveContainer width="100%" height="100%">
-                                <RadarChart cx="50%" cy="50%" outerRadius="70%" data={dashboardData.radar}>
-                                    <PolarGrid stroke="rgba(255,255,255,0.1)" />
-                                    <PolarAngleAxis dataKey="area" tick={{ fill: '#94a3b8', fontSize: 12 }} />
-                                    <Radar name="Score" dataKey="value" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.3} />
-                                    <Tooltip
-                                        contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
-                                        itemStyle={{ color: '#fff' }}
-                                    />
-                                </RadarChart>
-                            </ResponsiveContainer>
-                        </CardContent>
-                    </Card>
-                </Grid>
-
-                {/* Tab Navigation */}
-                <div style={{ marginTop: '32px' }}>
-                    <TabsList>
-                        <TabTrigger active={activeTab === 'skills'} onClick={() => setActiveTab('skills')}>
-                            <Target size={16} /> Skills & Gaps
-                        </TabTrigger>
-                        <TabTrigger active={activeTab === 'recommendations'} onClick={() => setActiveTab('recommendations')}>
-                            <Sparkles size={16} /> Recommendations
-                        </TabTrigger>
-                    </TabsList>
-
-                    {activeTab === 'skills' && (
-                        <Grid>
-                            <Card>
-                                <CardHeader>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#f87171' }}>
-                                        <AlertTriangle size={20} />
-                                        <CardTitle>Missing Keywords</CardTitle>
-                                    </div>
-                                </CardHeader>
-                                <CardContent>
-                                    <p style={{ fontSize: '0.9rem', color: '#94a3b8', marginBottom: '12px' }}>
-                                        Use these exact keywords in your CV to pass ATS filters:
-                                    </p>
-                                    <div>
-                                        {dashboardData.skills.missing.length > 0 ? (
-                                            dashboardData.skills.missing.map((skill: any, idx: number) => (
-                                                <SkillPill key={idx} name={skill.name || skill} tone="missing" />
-                                            ))
-                                        ) : (
-                                            <div style={{ color: '#94a3b8', fontStyle: 'italic' }}>No critical gaps detected. Good job!</div>
-                                        )}
-                                    </div>
-                                </CardContent>
-                            </Card>
-
-                            <Card style={{ gridColumn: 'span 2' }}>
-                                <CardHeader>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#3b82f6' }}>
-                                        <CheckCircle2 size={20} />
-                                        <CardTitle>Skill Distribution Analysis</CardTitle>
-                                    </div>
-                                </CardHeader>
-                                <CardContent style={{ height: '200px' }}>
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <BarChart data={[
-                                            { name: 'Found', value: dashboardData.score.skills, fill: '#10b981' },
-                                            { name: 'Missing', value: 100 - dashboardData.score.skills, fill: '#ef4444' }
-                                        ]} layout="vertical">
-                                            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgba(255,255,255,0.05)" />
-                                            <XAxis type="number" hide />
-                                            <YAxis dataKey="name" type="category" width={80} tick={{ fill: '#94a3b8' }} />
-                                            <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ background: '#1e293b', border: 'none' }} />
-                                            <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={32} />
-                                        </BarChart>
-                                    </ResponsiveContainer>
-                                </CardContent>
-                            </Card>
-                        </Grid>
-                    )}
-
-                    {activeTab === 'recommendations' && (
-                        <Card>
-                            <CardHeader>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#f59e0b' }}>
-                                    <Sparkles size={20} />
-                                    <CardTitle>AI Recommendations</CardTitle>
-                                </div>
-                            </CardHeader>
-                            <CardContent>
-                                <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                                    {data?.recommendations?.map((rec: string, idx: number) => (
-                                        <li key={idx} style={{
-                                            padding: '12px',
-                                            marginBottom: '8px',
-                                            background: 'rgba(255,255,255,0.03)',
-                                            borderRadius: '8px',
-                                            display: 'flex',
-                                            gap: '12px',
-                                            fontSize: '0.9rem'
-                                        }}>
-                                            <span style={{ color: '#f59e0b', fontWeight: 'bold' }}>•</span>
-                                            {rec}
-                                        </li>
-                                    ))}
-                                </ul>
+            {/* Tab Content */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {activeTab === 'overview' && (
+                    <>
+                        <Card className="md:col-span-2">
+                            <CardHeader
+                                title="Candidate Fit"
+                                description={d.roleFit.summary}
+                                icon={User}
+                                iconColor="text-indigo-400"
+                            />
+                            <CardContent className="grid grid-cols-2 gap-6">
+                                <ScoreBar label="Skills Match" value={d.score.skills} colorClass="bg-emerald-500" />
+                                <ScoreBar label="Experience" value={d.score.experience} colorClass="bg-blue-500" />
+                                <ScoreBar label="Projects" value={d.score.projects} colorClass="bg-indigo-500" />
+                                <ScoreBar label="Market Readiness" value={d.score.marketReadiness} colorClass="bg-amber-500" />
                             </CardContent>
                         </Card>
-                    )}
-                </div>
 
+                        <Card>
+                            <CardHeader title="Quick Metrics" icon={TrendingUp} iconColor="text-emerald-400" />
+                            <CardContent className="space-y-4">
+                                <div className="p-4 bg-white/5 border border-white/5 rounded-2xl">
+                                    <div className="text-slate-400 text-[10px] font-bold uppercase tracking-wider mb-1">Target Role</div>
+                                    <div className="text-white font-bold">{d.candidate.targetRole}</div>
+                                </div>
+                                <div className="p-4 bg-white/5 border border-white/5 rounded-2xl">
+                                    <div className="text-slate-400 text-[10px] font-bold uppercase tracking-wider mb-1">Seniority</div>
+                                    <div className="text-white font-bold">{d.candidate.seniority}</div>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="md:col-span-3">
+                            <CardHeader title="ATS Optimization Checklist" description="Evaluation based on algorithm-standard metrics" icon={FileText} iconColor="text-blue-400" />
+                            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {d.atsChecklist.map((item: any) => (
+                                    <div key={item.id} className="flex items-start gap-3 p-3 bg-white/2 rounded-xl border border-white/5">
+                                        <div className={`mt-0.5 rounded-full p-1 ${item.done ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-500/20 text-slate-500'}`}>
+                                            <Check size={12} className={item.done ? "visible" : "invisible"} />
+                                        </div>
+                                        <span className={`text-sm ${item.done ? 'text-slate-200' : 'text-slate-500'}`}>{item.text}</span>
+                                    </div>
+                                ))}
+                            </CardContent>
+                        </Card>
+                    </>
+                )}
+
+                {activeTab === 'skills' && (
+                    <>
+                        <Card className="md:col-span-3">
+                            <CardHeader title="Skill Keyword Analysis" description="Comparison with industry benchmarks for your target role" icon={Sparkles} iconColor="text-amber-400" />
+                            <CardContent className="space-y-8">
+                                <div>
+                                    <h4 className="text-emerald-400 font-bold text-xs uppercase tracking-widest mb-4 flex items-center gap-2">
+                                        <CheckCircle2 size={14} /> Strong Keywords
+                                    </h4>
+                                    <div className="flex flex-wrap gap-2">
+                                        {d.skills.strong.map((s: any, i: number) => <SkillBadge key={i} name={s.name || s} type="strong" />)}
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4 border-t border-white/5">
+                                    <div>
+                                        <h4 className="text-rose-400 font-bold text-xs uppercase tracking-widest mb-4 flex items-center gap-2">
+                                            <AlertTriangle size={14} /> Missing Keywords (ATS Gap)
+                                        </h4>
+                                        <div className="flex flex-wrap gap-2">
+                                            {d.skills.missing.map((s: any, i: number) => <SkillBadge key={i} name={s.name || s} type="missing" />)}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <h4 className="text-amber-400 font-bold text-xs uppercase tracking-widest mb-4 flex items-center gap-2">
+                                            <TrendingUp size={14} /> Growth Opps
+                                        </h4>
+                                        <div className="flex flex-wrap gap-2">
+                                            {d.skills.weak.map((s: any, i: number) => <SkillBadge key={i} name={s.name || s} type="weak" />)}
+                                        </div>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </>
+                )}
+
+                {activeTab === 'projects' && (
+                    <>
+                        <div className="md:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {d.projects.map((proj: any, i: number) => (
+                                <Card key={i}>
+                                    <CardHeader title={proj.title} description={`Level: ${proj.level}`} icon={Trophy} iconColor="text-blue-400" />
+                                    <CardContent>
+                                        <p className="text-slate-400 text-sm leading-relaxed mb-4">{proj.description}</p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {proj.skills?.map((s: string, j: number) => (
+                                                <span key={j} className="px-2 py-1 bg-white/5 rounded-lg text-[10px] text-slate-300 font-bold border border-white/10 uppercase tracking-tighter">
+                                                    {s}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            ))}
+                        </div>
+                    </>
+                )}
             </div>
-        </DashboardContainer>
+
+            {/* Footer / CTA */}
+            <div className="mt-8 p-6 bg-gradient-to-r from-blue-600/10 to-indigo-600/10 border border-blue-500/20 rounded-3xl">
+                <h4 className="text-white font-bold mb-2 flex items-center gap-2">
+                    <Sparkles className="text-blue-400" size={18} /> نصيحة الـ AI الشخصية لك
+                </h4>
+                <p className="text-slate-300 text-sm leading-relaxed italic">
+                    {d.recommendations[0] || "استمر في تطوير مهاراتك التقنية وتركيزك على المشاريع العملية لتعزيز فرصك في السوق."}
+                </p>
+            </div>
+        </div>
     );
 }

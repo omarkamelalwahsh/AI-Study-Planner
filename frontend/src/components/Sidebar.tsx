@@ -10,9 +10,12 @@ import {
 interface SidebarProps {
     onNewChat: () => void;
     isOpen: boolean;
+    sessions: { id: string; title: string }[];
+    onOpenSession: (id: string) => void;
+    onDeleteSession: (id: string) => void;
 }
 
-export default function Sidebar({ onNewChat, isOpen }: SidebarProps) {
+export default function Sidebar({ onNewChat, isOpen, sessions, onOpenSession, onDeleteSession }: SidebarProps) {
     return (
         <motion.aside
             initial={false}
@@ -50,15 +53,35 @@ export default function Sidebar({ onNewChat, isOpen }: SidebarProps) {
                     المحادثات السابقة
                 </div>
                 <div className="space-y-2">
-                    {/* Dummy History Items */}
-                    <div className="p-3 rounded-xl bg-white/5 border border-white/5 flex items-center gap-3 cursor-pointer hover:bg-white/10 hover:border-white/10 transition-all group">
-                        <History className="w-4 h-4 text-slate-500 group-hover:text-blue-400 shrink-0" />
-                        <span className="text-sm text-slate-300 truncate">رحلة التعلم في Python</span>
-                    </div>
-                    <div className="p-3 rounded-xl bg-transparent border border-transparent flex items-center gap-3 cursor-pointer hover:bg-white/5 transition-all group opacity-60 hover:opacity-100">
-                        <History className="w-4 h-4 text-slate-500 shrink-0" />
-                        <span className="text-sm text-slate-400 truncate">خطة التسويق الرقمي</span>
-                    </div>
+                    {sessions.map(s => (
+                        <div
+                            key={s.id}
+                            onClick={() => onOpenSession(s.id)}
+                            className="p-3 rounded-xl bg-white/5 border border-white/5 flex items-center justify-between cursor-pointer hover:bg-white/10 hover:border-white/10 transition-all group"
+                        >
+                            <div className="flex items-center gap-3 truncate">
+                                <History className="w-4 h-4 text-slate-500 group-hover:text-blue-400 shrink-0" />
+                                <span className="text-sm text-slate-300 truncate">{s.title}</span>
+                            </div>
+
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onDeleteSession(s.id);
+                                }}
+                                className="p-1.5 hover:bg-red-500/20 hover:text-red-400 rounded-lg text-slate-500 transition-colors opacity-0 group-hover:opacity-100"
+                                title="حذف"
+                            >
+                                <LogOut className="w-4 h-4 rotate-90" /> {/* Using LogOut as a temporary Trash icon if not available */}
+                            </button>
+                        </div>
+                    ))}
+
+                    {sessions.length === 0 && (
+                        <div className="text-center py-8 text-slate-600 text-xs">
+                            لا يوجد محادثات سابقة
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -74,7 +97,7 @@ export default function Sidebar({ onNewChat, isOpen }: SidebarProps) {
                             ME
                         </div>
                         <div className="flex flex-col">
-                            <span className="text-xs font-bold text-slate-200">Ahmed Ali</span>
+                            <span className="text-xs font-bold text-slate-200">User</span>
                             <span className="text-[10px] text-slate-500">Free Plan</span>
                         </div>
                     </div>

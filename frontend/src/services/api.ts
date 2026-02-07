@@ -52,33 +52,95 @@ interface ErrorDetail {
     message: string;
 }
 
-interface CVSection {
+interface Card {
+    type: 'roadmap' | 'skills' | 'summary' | 'info';
     title: string;
-    score: number;
-    status: string;
-    notes: string;
+    items?: string[];
+    steps?: { title: string; desc: string; courses?: string[] }[];
+    content?: string;
+}
+
+interface OneQuestion {
+    question: string;
+    choices: string[];
+}
+
+interface CVScore {
+    overall: number;
+    skills: number;
+    experience: number;
+    projects: number;
+    marketReadiness: number;
+    ats?: number;
+    readiness?: number;
+}
+
+interface CVSkill {
+    name: string;
+    confidence: number;
+}
+
+interface CVRadarArea {
+    area: string;
+    value: number;
+}
+
+interface CVATSItem {
+    id: string;
+    text: string;
+    done: boolean;
 }
 
 interface CVDashboard {
-    overall_score: number;
-    sections: CVSection[];
-    missing_keywords: string[];
+    candidate: {
+        name: string;
+        targetRole: string;
+        seniority: string;
+    };
+    score: CVScore;
+    roleFit: {
+        detectedRoles: string[];
+        direction: string;
+        summary: string;
+    };
+    skills: {
+        strong: CVSkill[];
+        weak: CVSkill[];
+        missing: CVSkill[];
+    };
+    radar: CVRadarArea[];
+    projects: any[];
+    atsChecklist: CVATSItem[];
+    notes: {
+        strengths: string;
+        gaps: string;
+    };
     recommendations: string[];
 }
 
 interface ChatResponse {
     session_id: string;
     intent: string;
+    language: string;
+    title: string;
     answer: string;
+    cards: Card[];
     courses: CourseDetail[];
-    all_relevant_courses?: CourseDetail[];
-    projects: ProjectDetail[];
-    skill_groups: SkillGroup[];
-    catalog_browsing: any | null;
-    learning_plan: LearningPlan | null;
-    dashboard: CVDashboard | null;
-    error: ErrorDetail | null;
+    one_question?: OneQuestion | null;
+
+    // Metadata and internal tracker
     request_id: string;
+    meta: any;
+    flow_state_updates?: any;
+
+    // Legacy support (to be phased out)
+    all_relevant_courses?: CourseDetail[];
+    projects?: ProjectDetail[];
+    skill_groups?: SkillGroup[];
+    catalog_browsing?: any | null;
+    learning_plan?: LearningPlan | null;
+    dashboard?: CVDashboard | null;
+    error?: ErrorDetail | null;
     ask?: {
         question: string;
         choices: string[];
@@ -86,10 +148,11 @@ interface ChatResponse {
     followup_question?: string;
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8001';
+const API_BASE = API_BASE_URL;
 
 export async function sendMessage(message: string, sessionId?: string): Promise<ChatResponse> {
-    const response = await fetch(`${API_BASE_URL}/chat`, {
+    const response = await fetch(`${API_BASE}/chat`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -110,26 +173,33 @@ export async function sendMessage(message: string, sessionId?: string): Promise<
     return response.json();
 }
 
-export async function uploadCV(file: File, sessionId?: string): Promise<ChatResponse> {
-    const formData = new FormData();
-    formData.append('file', file);
-    if (sessionId) {
-        formData.append('session_id', sessionId);
-    }
+export const uploadCV = async (file: File, sessionId?: string) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    if (sessionId) formData.append('session_id', sessionId)
 
-    const response = await fetch(`${API_BASE_URL}/upload-cv`, {
+    const response = await fetch(`${API_BASE}/upload-cv`, {
         method: 'POST',
         body: formData,
-    });
+    })
 
     if (!response.ok) {
-        throw new Error(`Upload failed: ${response.statusText}`);
+        throw new Error('فشل رفع الملف')
     }
 
-    return response.json();
+    return response.json()
 }
 
+export const fetchCourseDetails = async (courseId: string) => {
+    const response = await fetch(`${API_BASE}/courses/${courseId}`)
+    if (!response.ok) {
+        throw new Error('فشل جلب تفاصيل الكورس')
+    }
+    return response.json()
+}
+
+
 export async function checkHealth(): Promise<any> {
-    const response = await fetch(`${API_BASE_URL}/health`);
+    const response = await fetch(`${API_BASE}/health`);
     return response.json();
 }
