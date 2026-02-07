@@ -1,6 +1,8 @@
 """
-Career Copilot RAG Backend - Step 1: Intent Router
-Classifies user intent into predefined categories.
+Career Copilot RAG Backend - Step 1: Intent Router (Stable Production)
+- Returns ONLY valid IntentType values.
+- Normalizes common LLM variants (e.g., CATALOG_BROWSING -> CATALOG_BROWSE).
+- Uses deterministic overrides first to reduce LLM dependence.
 """
 import logging
 from typing import Optional
@@ -10,145 +12,130 @@ from models import IntentType, IntentResult
 
 logger = logging.getLogger(__name__)
 
-INTENT_SYSTEM_PROMPT = """SYSTEM: Career Copilot — Intent Router (Strict Routing v2)
+INTENT_SYSTEM_PROMPT = """
+You are the Intent Router for Career Copilot RAG.
+Return JSON ONLY (no markdown, no extra text).
 
-Output exactly one intent from:
-TRACK_START, COURSE_SEARCH, CAREER_GUIDANCE, CV_ANALYSIS, GENERAL_QA, FOLLOW_UP, ERROR
+Allowed intents ONLY:
+COURSE_SEARCH, CATALOG_BROWSE, CAREER_GUIDANCE, GENERAL_QA, FOLLOW_UP, SAFE_FALLBACK
 
-HARD RULES:
-1) If user message includes a clear track/topic (e.g., Marketing, Programming, Data Science) AND user is "lost/تايه" or beginner -> TRACK_START.
-2) If user message includes a career goal/role (e.g., "مدير عام", "Sales Manager") -> CAREER_GUIDANCE.
-3) If user asks for courses or says "عاوز اتعلم <Topic>" -> COURSE_SEARCH.
-
-Output JSON schema:
+Schema:
 {
-  "intent": "TRACK_START|COURSE_SEARCH|CAREER_GUIDANCE|CV_ANALYSIS|GENERAL_QA|FOLLOW_UP|ERROR",
-  "confidence": 0.0-1.0,
-  "reason": "short",
-  "slots": {"topic": "...", "role": "...", "level": "..."}
+  "intent": "COURSE_SEARCH" | "CATALOG_BROWSE" | "CAREER_GUIDANCE" | "GENERAL_QA" | "FOLLOW_UP" | "SAFE_FALLBACK",
+  "topic": string|null,
+  "role": string|null,
+  "confidence": number,
+  "needs_courses": boolean,
+  "needs_explanation": boolean
 }
-Return JSON only. No extra text."""
 
+Rules:
+- If the user asks for a study plan/roadmap/how to become X -> CAREER_GUIDANCE (needs_explanation=true)
+- If the user asks to show courses or courses for X -> COURSE_SEARCH (needs_courses=true)
+- If user asks what categories you have -> CATALOG_BROWSE
+- If user message is short confirmation like "ok/ماشي/تمام/yes" -> FOLLOW_UP
+- If uncertain -> SAFE_FALLBACK
+"""
+
+ALIASES = {
+    "CATALOG_BROWSING": "CATALOG_BROWSE",
+    "BROWSE_CATALOG": "CATALOG_BROWSE",
+    "CATALOG": "CATALOG_BROWSE",
+    "AMBIGUOUS": "SAFE_FALLBACK",
+    "UNKNOWN": "SAFE_FALLBACK",
+    "OTHER": "SAFE_FALLBACK",
+    "EXPLORATION": "SAFE_FALLBACK",
+}
 
 class IntentRouter:
-    """Step 1: Classify user intent."""
-    
     def __init__(self, llm: LLMBase):
         self.llm = llm
-    
+
+    def _check_manual_overrides(self, msg: str) -> Optional[IntentResult]:
+        m = (msg or "").strip().lower()
+
+        # Follow-up short confirmations
+        if m in {"ماشي", "تمام", "اه", "أه", "ايوه", "أيوة", "ok", "okay", "yes", "yep"}:
+            return IntentResult(intent=IntentType.FOLLOW_UP, confidence=0.95)
+
+        # Catalog browsing
+        if any(k in m for k in ["ايه المجالات", "الأقسام", "الكتالوج", "catalog", "categories", "مجالات عندك", "وريني المجالات"]):
+            return IntentResult(intent=IntentType.CATALOG_BROWSE, confidence=0.95)
+
+        # React / frontend
+        if "react" in m:
+            # plan request => CAREER_GUIDANCE, else COURSE_SEARCH
+            if any(k in m for k in ["خطة", "plan", "roadmap", "مسار", "مذاكرة", "اتعلم"]):
+                return IntentResult(intent=IntentType.CAREER_GUIDANCE, topic="React", needs_explanation=True, confidence=0.95)
+            return IntentResult(intent=IntentType.COURSE_SEARCH, topic="React", needs_courses=True, confidence=0.9)
+
+        # Sales manager role questions
+        is_mgr = any(k in m for k in ["مدير", "manager", "lead", "قيادة"])
+        is_sales = any(k in m for k in ["مبيعات", "sales", "selling"])
+        if is_mgr and is_sales:
+            return IntentResult(intent=IntentType.CAREER_GUIDANCE, role="Sales Manager", topic="Sales Management", needs_explanation=True, needs_courses=True, confidence=0.95)
+
+        # "How to become" style
+        if any(k in m for k in ["ازاي", "كيف", "how to", "how do i", "how can i", "أطور نفسي", "develop myself"]):
+            return IntentResult(intent=IntentType.CAREER_GUIDANCE, needs_explanation=True, confidence=0.75)
+
+        # Course search verbs
+        if any(k in m for k in ["كورسات", "courses", "اعرض", "وريني", "show me", "recommend courses"]):
+            return IntentResult(intent=IntentType.COURSE_SEARCH, needs_courses=True, confidence=0.7)
+
+        return None
+
     async def classify(self, user_message: str, context: Optional[str] = None) -> IntentResult:
-        """
-        Classify the user's intent. (Production V15: Orchestrated with strict rules first).
-        """
-        # 1. Deterministic Overrides (Fastest Path)
-        override_result = self._check_manual_overrides(user_message)
-        if override_result:
-            return override_result
-            
-        # 2. LLM Path for complex/ambiguous queries
-        prompt = f"User Message: \"{user_message}\""
-        if context: prompt = f"Previous Context:\n{context}\n\n{prompt}"
-        
+        override = self._check_manual_overrides(user_message)
+        if override:
+            return override
+
+        prompt = f'User Message: "{user_message}"'
+        if context:
+            prompt = f"Previous Context:\n{context}\n\n{prompt}"
+
         try:
             response = await self.llm.generate_json(
                 prompt=prompt,
                 system_prompt=INTENT_SYSTEM_PROMPT,
                 temperature=0.0,
             )
-            
-            intent_str = response.get("intent", "AMBIGUOUS")
-            slots = response.get("slots", {})
-            
-            # Map slots & Context Persistence
-            if (intent_str in ["AMBIGUOUS", "FOLLOW_UP"]) and context and len(user_message.split()) < 5:
-                if "LEARNING_PATH" in context: intent_str = "LEARNING_PATH"
-                elif "CAREER_GUIDANCE" in context: intent_str = "CAREER_GUIDANCE"
+
+            intent_str = (response.get("intent") or "SAFE_FALLBACK").strip().upper()
+            intent_str = ALIASES.get(intent_str, intent_str)
 
             try:
-                intent = IntentType(intent_str)
-            except ValueError:
-                intent = IntentType.AMBIGUOUS
-            
+                intent_enum = IntentType(intent_str)
+            except Exception:
+                logger.warning(f"Invalid intent '{intent_str}' -> SAFE_FALLBACK")
+                intent_enum = IntentType.SAFE_FALLBACK
+
+            topic = response.get("topic")
+            role = response.get("role")
+            confidence = float(response.get("confidence", 0.0) or 0.0)
+            needs_courses = bool(response.get("needs_courses", False))
+            needs_explanation = bool(response.get("needs_explanation", False))
+
             return IntentResult(
-                intent=intent,
-                confidence=response.get("confidence", 0.0),
-                slots=slots,
-                role=slots.get("role"),
-                level=slots.get("level"),
-                topic=slots.get("topic"),
-                search_axes=response.get("search_axes", []),
-                needs_courses=(intent in [IntentType.COURSE_SEARCH, IntentType.CATALOG_BROWSING, IntentType.LEARNING_PATH, IntentType.CAREER_GUIDANCE]),
-                needs_explanation=(intent in [IntentType.CAREER_GUIDANCE, IntentType.GENERAL_QA, IntentType.LEARNING_PATH])
+                intent=intent_enum,
+                topic=topic,
+                role=role,
+                confidence=confidence,
+                needs_courses=needs_courses,
+                needs_explanation=needs_explanation,
             )
+
         except Exception as e:
-            logger.error(f"Intent classification failed: {e}")
-            return IntentResult(intent=IntentType.AMBIGUOUS, clarification_needed=True)
+            logger.error(f"Intent classification failed: {e}", exc_info=True)
+            return IntentResult(intent=IntentType.SAFE_FALLBACK, confidence=0.0)
 
     async def route(self, message: str, session_state: dict) -> IntentResult:
-        """
-        Production Hardening: Compatibility alias for route().
-        User requests this specific signature for robustness.
-        """
-        # Pass session state context if available
-        context = str(session_state) if session_state else None
+        # Build minimal context string (avoid huge tokens)
+        last_topic = session_state.get("last_topic")
+        last_intent = session_state.get("last_intent")
+        ctx = []
+        if last_intent: ctx.append(f"last_intent: {last_intent}")
+        if last_topic: ctx.append(f"last_topic: {last_topic}")
+        context = "\n".join(ctx) if ctx else None
+
         return await self.classify(message, context=context)
-
-    def _check_manual_overrides(self, message: str) -> Optional[IntentResult]:
-        """Strict keyword overrides for production determinism (v2)."""
-        msg = message.strip().lower()
-        
-        # 1. Detect Domain/Track (Marketing, Python, Databases, Data Science, Business, Design, Programming)
-        from data_loader import data_loader
-        all_cats = [c.lower() for c in data_loader.get_all_categories()]
-        main_domains = ["programming", "data science", "marketing", "business", "design", "development", "python", "databases"]
-        
-        detected_domain = None
-        for domain in main_domains:
-            if domain in msg:
-                detected_domain = domain.title()
-                break
-        
-        if not detected_domain:
-            for cat in all_cats:
-                if cat in msg and len(cat) > 3:
-                    detected_domain = cat
-                    break
-
-        # 2. Lost / Unsure Keywords
-        is_lost = any(kw in msg for kw in ["مش عارف", "تايه", "محتار", "ساعدني", "don't know", "help", "ابدأ منين"])
-
-        # 3. Rule B.1: Track + Lost -> TRACK_START (Override ASK_CATEGORY/EXPLORATION)
-        if detected_domain and is_lost:
-            return IntentResult(
-                intent=IntentType.TRACK_START,
-                topic=detected_domain,
-                confidence=1.0,
-                needs_explanation=True,
-                slots={"topic": detected_domain}
-            )
-
-        # 4. Rule B.2: Career Goal/Role -> CAREER_GUIDANCE
-        roles_kws = ["مدير", "manager", "lead", "head of", "director", "قائد", "رئيس", "senior", "specialist"]
-        if any(kw in msg for kw in roles_kws):
-            return IntentResult(
-                intent=IntentType.CAREER_GUIDANCE,
-                confidence=1.0,
-                needs_courses=True,
-                needs_explanation=True,
-                slots={"role": msg} # Capture the role from message
-            )
-
-        # 5. Rule B.1 (Search Path): Track explicitly mentioned -> COURSE_SEARCH
-        # BUT ONLY if not lost (caught above)
-        if detected_domain:
-            return IntentResult(
-                intent=IntentType.COURSE_SEARCH,
-                topic=detected_domain,
-                confidence=1.0,
-                needs_courses=True,
-                needs_explanation=True,
-                slots={"topic": detected_domain}
-            )
-
-        # Default: No override
-        return None

@@ -160,9 +160,9 @@ class GroqGateway(LLMBase):
         resp = await self._call_api_with_retry(messages, temperature=temperature, max_tokens=max_tokens)
         return resp.choices[0].message.content or ""
         
-    async def generate_json(self, prompt, system_prompt=None, temperature=0.3) -> Dict[str, Any]:
+    async def generate_json(self, prompt, system_prompt=None, temperature=0.3, **kwargs) -> Dict[str, Any]:
         # Legacy adaptor pointing to chat_json (no schema)
-        return await self.chat_json(prompt, system_prompt=system_prompt, temperature=temperature)
+        return await self.chat_json(prompt, system_prompt=system_prompt, temperature=temperature, **kwargs)
 
 # Singleton Pattern for Gateway
 _gateway_instance = None

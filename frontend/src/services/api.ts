@@ -53,16 +53,27 @@ interface ErrorDetail {
 }
 
 interface Card {
-    type: 'roadmap' | 'skills' | 'summary' | 'info';
-    title: string;
-    items?: string[];
-    steps?: { title: string; desc: string; courses?: string[] }[];
-    content?: string;
+    type: 'roadmap' | 'skills' | 'courses' | 'cv_summary' | 'next_steps' | 'assessment' | 'notes';
+    heading: string;
+    bullets: string[];
 }
 
 interface OneQuestion {
     question: string;
     choices: string[];
+}
+
+interface QuizData {
+    is_active: boolean;
+    question: string | null;
+    choices: string[];
+    collected: {
+        goal_type?: string | null;
+        track?: string | null;
+        level?: string | null;
+        weekly_time?: string | null;
+        learning_style?: string | null;
+    };
 }
 
 interface CVScore {
@@ -124,7 +135,9 @@ interface ChatResponse {
     language: string;
     title: string;
     answer: string;
+    quiz: QuizData;
     cards: Card[];
+    radar: CVRadarArea[];
     courses: CourseDetail[];
     one_question?: OneQuestion | null;
 
@@ -141,11 +154,6 @@ interface ChatResponse {
     learning_plan?: LearningPlan | null;
     dashboard?: CVDashboard | null;
     error?: ErrorDetail | null;
-    ask?: {
-        question: string;
-        choices: string[];
-    };
-    followup_question?: string;
 }
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8001';

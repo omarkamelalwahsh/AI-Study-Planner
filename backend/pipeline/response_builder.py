@@ -98,134 +98,22 @@ STRICT OUTPUT JSON SCHEMA:
   "recommendations": ["..."]
 }"""
 
-RESPONSE_SYSTEM_PROMPT = """You are "Career Copilot", a production-grade career assistant for Zedny.
-Your job is to output a STRICT JSON response used by the frontend UI.
-You MUST follow the schema and the routing/UX rules below to prevent broken flows.
-
-────────────────────────────────────────────────────────
-A) Language & Tone (HARD)
-────────────────────────────────────────────────────────
-- Mirror the user language: Arabic user → Arabic output. English user → English output.
-- Be concise, structured, friendly-professional.
-- Never output filler like: "How can I help?" if the user already expressed a goal or topic.
-- Avoid long paragraphs. Use short bullets.
-
-────────────────────────────────────────────────────────
-B) HARD ROUTING OVERRIDES (Fix "تايه" + track)
-────────────────────────────────────────────────────────
-1) If user message includes a clear track/topic (e.g., Marketing, Python, Databases, Data Science, Business, Design) 
-   then intent MUST NOT be "ASK_CATEGORY". 
-   Instead set intent to:
-   - "TRACK_START" if user is "lost/تايه" or beginner,
-   - OR "COURSE_SEARCH" if user explicitly asks for courses.
-
-2) If user message includes a career goal/role:
-   Examples: "عاوز أبقى مدير عام", "مدير مبيعات", "Sales Manager", "General Manager"
-   then intent MUST be "CAREER_GUIDANCE" even if the user didn't ask a question.
-
-3) If the user uploaded a CV (upload endpoint):
-   intent MUST be "CV_ANALYSIS" and MUST produce a visible response (never empty).
-   Always include a CV summary card + one follow-up question.
-
-────────────────────────────────────────────────────────
-C) COURSES: Strict grounding rules (HARD)
-────────────────────────────────────────────────────────
-- You are NOT allowed to invent courses.
-- If courses are provided to you by the system context, use them.
-- If the system provides zero courses, you MUST say no matching courses and ask a clarification,
-  but also include a safe fallback suggestion (e.g., choose a sub-topic).
-- Do not mention external platforms or courses outside the catalog.
-
-────────────────────────────────────────────────────────
-D) Fix the "تايه" onboarding behavior (HARD)
-────────────────────────────────────────────────────────
-When user says "عاوز أبدأ أتعلم <TRACK> وتايه":
-- DO NOT ask: "تحب تبدأ في أنهي مجال؟" because the track is already known.
-- Provide:
-  1) A simple roadmap (3 steps)
-  2) ONE question about a sub-track (e.g., Digital Marketing / Social Media / Content)
-  3) Optionally top 3 catalog courses if provided
-
-Example Arabic behavior:
-- Confirm track in one line
-- Roadmap bullets
-- One question: "تحب تبدأ Digital Marketing ولا Social Media ولا Content؟"
-
-────────────────────────────────────────────────────────
-E) CV Upload UX rules (HARD)
-────────────────────────────────────────────────────────
-When intent = "CV_ANALYSIS":
-- Always produce a visible answer + cards.
-- Include:
-  1) "cv_summary" card: headline + 3-6 bullets (top skills/roles detected)
-  2) If skills_vocab filtering discards many skills, do NOT mention internal filtering.
-     Instead output "skills_detected" with what you ARE confident about.
-  3) Ask ONE follow-up question about target role to continue the flow.
-- If rate-limit/429 occurred (even if retried), keep response short and stable.
-
-────────────────────────────────────────────────────────
-F) UI Actions (HARD) — Fix "click course to open details"
-────────────────────────────────────────────────────────
-The frontend supports UI actions.
-When returning courses, ALWAYS attach an action for each course:
-- action.type = "OPEN_COURSE_DETAILS"
-- action.course_id = "<course_id>"
-This enables the UI to open a details modal or fetch /courses/{course_id}.
-
-────────────────────────────────────────────────────────
-G) Output JSON Schema (STRICT — no extra keys)
-────────────────────────────────────────────────────────
-Return ONLY valid JSON, no markdown, no comments:
-
+RESPONSE_SYSTEM_PROMPT = """SYSTEM: Career Copilot Advisor (PRODUCTION v3)
+Return only valid JSON matching this schema:
 {
-  "intent": "TRACK_START" | "COURSE_SEARCH" | "CAREER_GUIDANCE" | "CV_ANALYSIS" | "GENERAL_QA" | "ERROR",
-  "language": "ar" | "en",
-  "title": string,
-  "answer": string,
-  "cards": [
-    {
-      "type": "roadmap" | "skills" | "courses" | "assessment" | "cv_summary" | "next_steps" | "notes",
-      "heading": string,
-      "bullets": [string, ...]
-    }
-  ],
-  "courses": [
-    {
-      "course_id": string,
-      "title": string,
-      "category": string,
-      "level": string,
-      "description_short": string,
-      "action": { "type": "OPEN_COURSE_DETAILS", "course_id": string }
-    }
-  ],
-  "one_question": {
-    "question": string,
-    "choices": [string, ...]
-  }
+  "success": true,
+  "intent": "COURSE_SEARCH|CAREER_GUIDANCE|GENERAL_QA|FOLLOW_UP|SAFE_FALLBACK",
+  "message": "your advice or question here",
+  "courses": [{"course_id": "...", "description_short": "..."}],
+  "categories": ["cat1", "cat2"],
+  "errors": []
 }
 
-Rules:
-- "answer" must never be empty.
-- Always include "one_question" with exactly ONE question for intents:
-  TRACK_START, CAREER_GUIDANCE, CV_ANALYSIS
-- Cards order for TRACK_START: 
-  roadmap → next_steps → assessment
-- Cards order for CV_ANALYSIS:
-  cv_summary → next_steps → assessment
-- Cards order for COURSE_SEARCH:
-  courses → next_steps (optional)
-- Keep bullets short (<= 12 words).
-
-────────────────────────────────────────────────────────
-H) ERROR Handling (HARD)
-────────────────────────────────────────────────────────
-If something fails or data is missing:
-- intent = "ERROR"
-- Provide a friendly Arabic/English answer
-- Ask ONE question to recover
-- Do not crash the JSON format.
-"""
+RULES:
+1) Use user's language (Arabic or English).
+2) Grounding: Only recommend provided courses.
+3) No extra fields (radar, cards, etc) unless specifically needed for complex paths.
+4) Response must be valid JSON only."""
 
 LEARNING_PATH_SYSTEM_PROMPT = """You are Career Copilot. When intent = LEARNING_PATH:
 
@@ -274,15 +162,14 @@ class ResponseBuilder:
         # 2. Intent Resolve
         intent = intent_result.intent
         
-        # 3. Special Handlers
-        if intent == IntentType.CATALOG_BROWSING:
-             return self._build_catalog_browsing_response(user_message, is_ar)
-
-        if intent in [IntentType.EXPLORATION, IntentType.EXPLORATION_FOLLOWUP]:
-             return self._handle_exploration_flow(user_message, context, is_ar)
-
-        if intent == IntentType.CV_ANALYSIS:
-             return await self._build_cv_dashboard(user_message, skill_result, is_ar)
+        # 3. Special Handlers (Minimal)
+        if intent == IntentType.CATALOG_BROWSE:
+             # Standard fallback categories
+             cats = ["Programming", "Data Science", "Marketing", "Business", "Design"]
+             msg = "هذه هي المجالات المتاحة عندنا، تحب تستكشف إيه؟" if is_ar else "These are our domains, what would you like to explore?"
+             return ChatResponse(
+                success=True, intent=IntentType.CATALOG_BROWSE, message=msg, categories=cats, language=res_lang
+             )
 
         # 4. UNIFIED LLM PATH
         
@@ -317,17 +204,28 @@ class ResponseBuilder:
             response = await self.llm.generate_json(
                 system_prompt=RESPONSE_SYSTEM_PROMPT,
                 prompt=f"Context: {json.dumps(prompt_context)}",
-                temperature=0.0
+                temperature=0.0,
+                max_tokens=2048
             )
             
-            # --- FIX: Extract variables from LLM response ---
-            final_intent = response.get("intent", str(intent.value if hasattr(intent, 'value') else intent))
-            title = response.get("title", "")
-            answer = response.get("answer", "")
+            # --- FINAL SCHEMA COMPLIANCE (STRICT) ---
+            final_intent = response.get("intent") or str(intent.value if hasattr(intent, 'value') else intent)
+            message = response.get("message") or response.get("answer") or ""
+            success = response.get("success", True)
             
-            from models import Card, CourseDetail, Action, OneQuestion
+            from models import Card, CourseDetail, Action, OneQuestion, QuizData, RadarItem
             cards_raw = response.get("cards", [])
             cards = [Card(**c) for c in cards_raw if isinstance(c, dict)]
+            
+            # Radar: FORCE LIST
+            radar_raw = response.get("radar", [])
+            if isinstance(radar_raw, dict):
+                 radar_raw = [{"area": k, "value": v} for k, v in radar_raw.items()]
+            final_radar = [RadarItem(**r) for r in radar_raw if isinstance(r, dict)]
+
+            # Quiz: Initialize or map
+            quiz_raw = response.get("quiz", {})
+            quiz_data = QuizData(**quiz_raw) if quiz_raw else QuizData()
             
             # Match courses with catalog data and attach Action
             courses_raw = response.get("courses", [])
@@ -348,87 +246,33 @@ class ResponseBuilder:
             state_updates = response.get("flow_state_updates", {})
 
             # Build final Response Object
-            from models import ChatResponse, FlowStateUpdates
             return ChatResponse(
+                success=success,
                 intent=final_intent,
-                language=res_lang,
-                title=title,
-                answer=answer,
-                cards=cards,
+                message=message,
                 courses=final_courses,
-                one_question=one_question,
-                flow_state_updates=FlowStateUpdates(**state_updates) if state_updates else None
-            )
-
-        except Exception as e:
-            logger.error(f"Unified build v2 failed: {e}")
-            from models import ChatResponse, OneQuestion
-            fallback_msg = "تمام، تحب تبدأ بأنهي مجال من دول؟" if is_ar else "Great, which of these domains would you like to start with?"
-            choices = ["Programming", "Data Science", "Marketing", "Business", "Design"]
-            one_question = OneQuestion(question=fallback_msg, choices=choices)
-            return ChatResponse(
-                intent="ERROR",
+                categories=response.get("categories", []),
+                errors=response.get("errors", []),
+                next_action=response.get("next_action"),
                 language=res_lang,
-                title="Error",
-                answer=fallback_msg,
-                one_question=one_question
+                cards=cards,
+                radar=final_radar,
+                quiz=quiz_data,
+                flow_state_updates=FlowStateUpdates(**state_updates) if state_updates else None,
+                meta={"flow": "production_v3_core"}
             )
 
         except Exception as e:
-            logger.error(f"Unified build v1.0 failed: {e}")
-            fallback_msg = "تمام، تحب تبدأ بأنهي مجال من دول؟" if is_ar else "Great, which of these domains would you like to start with?"
-            choices = ["Programming", "Data Science", "Marketing", "Business", "Design"]
-            from models import OneQuestion
-            one_question = OneQuestion(question=fallback_msg, choices=choices)
-            return fallback_msg, "Error", [], [], one_question, IntentType.ERROR, {"language": res_lang}
-
-    def _handle_exploration_flow(self, user_msg: str, context: dict, is_ar: bool) -> tuple:
-        """
-        Zedny Exploration Flow (Simplified v1.0).
-        1) Detect Goal/Job -> Domains.
-        2) Unsure at domain step -> Repeat once.
-        3) Domain picked -> Switch to COURSE_SEARCH (skip sub-tracks).
-        """
-        exp_state = context.get("exploration", {})
-        if not exp_state: exp_state = {"step": 1, "unsure_count": 0}
-        
-        step = exp_state.get("step", 1)
-        user = user_msg.lower()
-    def _handle_exploration_flow(self, user_msg: str, context: dict, is_ar: bool) -> "ChatResponse":
-        """Deterministic Exploration Flow v2 (Aligne with Schema)."""
-        from models import ChatResponse, OneQuestion, Card, FlowStateUpdates
-        exp_state = context.get("exploration", {})
-        step = exp_state.get("step", 1)
-        main_domains = ["Programming", "Data Science", "Marketing", "Business", "Design"]
-        
-        if step == 1:
-            q = "تمام 👌 اختار مجال من دول عشان أساعدك تبدأ بسرعة:" if is_ar else "Great! Pick a domain to get started quickly:"
-            oq = OneQuestion(question=q, choices=main_domains)
-            exp_state["step"] = 2
+            logger.error(f"Production build failed: {e}", exc_info=True)
+            from models import ChatResponse
             return ChatResponse(
-                intent="EXPLORATION", language="ar" if is_ar else "en",
-                title="Exploration", answer=q, one_question=oq,
-                flow_state_updates=FlowStateUpdates(exploration=exp_state)
+                success=False,
+                intent=IntentType.SAFE_FALLBACK,
+                message="عذراً، حدث خطأ في النظام. هل يمكنني مساعدتك؟" if is_ar else "Sorry, a system error occurred. Can I help you?",
+                categories=["Programming", "Marketing", "Data Science"],
+                errors=[str(e)]
             )
-        
-        # ... simple transition or fallback
-        ans = "تحب تبدأ في أنهي مجال من دول؟" if is_ar else "Which field would you like to start with?"
-        return ChatResponse(
-            intent="EXPLORATION", language="ar" if is_ar else "en",
-            title="Exploration", answer=ans, 
-            one_question=OneQuestion(question=ans, choices=main_domains)
-        )
 
-    def _build_catalog_browsing_response(self, user_msg: str, is_ar: bool) -> "ChatResponse":
-        """Rule C: Return ONLY choices."""
-        from models import ChatResponse, OneQuestion
-        main_domains = ["Programming", "Data Science", "Marketing", "Business", "Design"]
-        q = "دي المجالات المتاحة عندنا، تحب تستكشف إيه؟" if is_ar else "These are our domains, what would you like to explore?"
-        return ChatResponse(
-            intent="CATALOG_BROWSING", language="ar" if is_ar else "en",
-            title="Browse Catalog", answer=q,
-            one_question=OneQuestion(question=q, choices=main_domains)
-        )
 
 
     async def _build_cv_dashboard(self, user_message: str, skill_result: SkillValidationResult, is_ar: bool) -> tuple:
@@ -454,9 +298,12 @@ Validated Skills: {', '.join(skill_result.validated_skills)}
             cards_raw = response.get("cards", [])
             cards = [Card(**c) for c in cards_raw if isinstance(c, dict)]
             
-            from models import OneQuestion
+            from models import OneQuestion, QuizData
             oq_data = response.get("one_question")
             one_question = OneQuestion(**oq_data) if oq_data and isinstance(oq_data, dict) else None
+            
+            # Quiz is empty for CV
+            quiz_data = QuizData()
 
             # Generate the Dashboard Data (Rich UI)
             # We can use a simpler call for the dashboard numeric data
@@ -501,6 +348,7 @@ Validated Skills: {', '.join(skill_result.validated_skills)}
                 language="ar" if is_ar else "en",
                 title=title,
                 answer=answer,
+                quiz=quiz_data,
                 cards=cards,
                 one_question=one_question,
                 dashboard=dashboard_data,
