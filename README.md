@@ -72,16 +72,30 @@ The backend (`/backend`) processes every request through this pipeline:
 
 - Python 3.9+
 - Node.js 16+
+- PostgreSQL (Optional, for persistent memory)
 
-### 1. Backend Setup
+### 1. Environment Setup
+
+Copy the example environment file and fill in your API keys:
+
+```bash
+cp .env.example .env
+```
+
+### 2. Backend Setup
 
 ```bash
 cd backend
+python -m venv venv
+# Windows
+venv\Scripts\activate
+# Linux/macOS
+source venv/bin/activate
 pip install -r requirements.txt
 uvicorn main:app --reload --host 0.0.0.0 --port 8001
 ```
 
-### 2. Frontend Setup
+### 3. Frontend Setup
 
 ```bash
 cd frontend
@@ -89,7 +103,7 @@ npm install
 npm run dev
 ```
 
-### 3. Data Updates
+### 4. Data Updates
 
 To add new courses, simply edit `backend/data/courses.csv`. The system automatically detects new categories and tracks on the next restart.
 

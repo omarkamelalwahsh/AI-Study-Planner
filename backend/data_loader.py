@@ -9,6 +9,7 @@ from pathlib import Path
 import logging
 
 from config import COURSES_CSV, SKILLS_CATALOG_CSV, SKILL_TO_COURSES_INDEX
+from catalog import category_service
 
 logger = logging.getLogger(__name__)
 
@@ -19,75 +20,68 @@ class DataLoader:
     _instance = None
     _initialized = False
     
-    # Production-Grade Domain Whitelists (V14 - Expert Refinement)
-    DOMAIN_CATEGORY_WHITELIST = {
-        "Backend Development": ["Programming", "Web Development", "Data Security", "Networking", "Technology Applications", "Project Management"],
-        "Frontend Development": ["Web Development", "Programming", "Graphic Design", "Technology Applications"],
-        "HR": ["Human Resources", "Business Fundamentals", "Leadership & Management", "Soft Skills"],
-        "Sales Management": ["Sales", "Leadership & Management", "Soft Skills", "Business Fundamentals", "Customer Service"],
-        "Web Design": ["Web Development", "Graphics & Design", "Marketing", "Digital Media"],
-        "Data Science": ["Data Management", "Programming", "Business Intelligence", "Business Strategy", "Technology Applications"],
-        "Data Analysis": ["Data Management", "Business Intelligence", "Technology Applications", "Business Strategy"],
-        "Sales": ["Sales", "Customer Service", "Marketing", "Business Strategy", "Business Fundamentals"],
-        "Marketing": ["Marketing", "Sales", "Digital Media", "Business Strategy", "Communication Skills"],
-        "Finance": ["Finance", "Accounting", "Business Strategy", "Business Fundamentals"],
-        "Project Management": ["Project Management", "Management & Leadership", "Business Strategy", "Soft Skills"],
-        "Soft Skills": ["Soft Skills", "Personal Development", "Communication Skills", "Career Development"],
-        "Management": ["Leadership & Management", "Project Management", "Business Strategy", "Soft Skills", "Business Fundamentals"],
-        "Mobile Development": ["Mobile Development", "Programming", "Technology Applications"]
-    }
+    def get_valid_categories(self) -> List[str]:
+        """
+        Returns strict list of categories that actually exist in courses.csv.
+        Integrated with CategoryService.
+        """
+        return category_service.get_all()
 
-    # ROLE POLICY: Specific whitelists for common complex roles (Case-Insensitive resolved)
-    ROLE_POLICY = {
-        "Sales Manager": ["Sales", "Leadership & Management", "Soft Skills", "Business Fundamentals", "Customer Service", "Project Management"],
-        "Engineering Manager": ["Leadership & Management", "Project Management", "Programming", "Web Development", "Soft Skills"],
-        "HR Manager": ["Human Resources", "Leadership & Management", "Soft Skills", "Business Fundamentals"],
-        "AI Manager": ["Leadership & Management", "Project Management", "Data Management", "Programming", "Business Strategy"],
-        "Marketing Manager": ["Marketing", "Sales", "Leadership & Management", "Business Strategy", "Digital Media"],
-        "Finance Manager": ["Finance", "Accounting", "Leadership & Management", "Business Strategy"],
-        "Full Stack Developer": ["Programming", "Web Development", "Data Management", "Networking", "Technology Applications"],
-        "Product Manager": ["Project Management", "Management & Leadership", "Marketing", "Business Strategy", "Soft Skills"],
+    def get_categories_for_role(self, role: str) -> List[str]:
+        """
+        Returns relevant categories for a role based on keyword matching against ACTUAL categories.
+        Dynamic, no hardcoding.
+        """
+        valid_cats = self.get_valid_categories()
+        if not role: 
+            return valid_cats[:5] # Default fallback
+
+        role_lower = role.lower().strip()
         
-        # V18 FIX 2: Accurate Data Roles
-        "Data Engineer": ["Technology Applications", "Programming", "Data Management", "Networking"],
-        "Data Analyst": ["Technology Applications", "Business Intelligence", "Data Management"],
-        "Data Scientist": ["Technology Applications", "Programming", "Data Management", "Business Intelligence"],
-    }
+        # 1. Resolve Arabic Aliases
+        if role_lower in self.ROLE_ARABIC_ALIASES:
+             role_lower = self.ROLE_ARABIC_ALIASES[role_lower].lower()
 
-    # Skill Priority for specific roles (overrides LLM)
-    ROLE_SKILL_PRIORITY = {
-         "Data Engineer": ["SQL", "Database", "ETL", "Data Warehouse", "Python", "Data Pipeline"],
-         "Data Analyst": ["SQL", "Excel", "Power BI", "Tableau", "Data Visualization"],
-         "Data Scientist": ["Python", "Machine Learning", "Statistics", "SQL", "Data Analysis"],
-    }
-    
-    # UMBRELLA TOPICS: Broad topics that map to multiple categories (V16)
-    UMBRELLA_TOPICS = {
-        "programming": ["Programming", "Web Development", "Mobile Development", "Data Security", "Networking", "Technology Applications"],
-        "برمجة": ["Programming", "Web Development", "Mobile Development", "Data Security", "Networking", "Technology Applications"],
-        "design": ["Graphic Design", "Digital Media", "Web Development", "Mobile Development"],
-        "ديزاين": ["Graphic Design", "Digital Media", "Web Development", "Mobile Development"],
-        "management": ["Leadership & Management", "Project Management", "Business Fundamentals", "Soft Skills"],
-        "ادارة": ["Leadership & Management", "Project Management", "Business Fundamentals", "Soft Skills"],
-        "hr": ["Human Resources", "Leadership & Management", "Soft Skills", "Business Fundamentals"],
-        "موارد بشرية": ["Human Resources", "Leadership & Management", "Soft Skills", "Business Fundamentals"],
-        "soft skills": ["Soft Skills", "Public Speaking", "Leadership & Management", "Personal Development"],
-        "سوفت سكيلز": ["Soft Skills", "Public Speaking", "Leadership & Management", "Personal Development"],
-        "marketing": ["Marketing Skills", "Sales", "Digital Media", "Business Fundamentals"],
-        "تسويق": ["Marketing Skills", "Sales", "Digital Media", "Business Fundamentals"],
-        "sales": ["Sales", "Customer Service", "Business Fundamentals", "Marketing Skills"],
-        "مبيعات": ["Sales", "Customer Service", "Business Fundamentals", "Marketing Skills"],
-        "data": ["Technology Applications", "Programming", "Business Fundamentals", "Data Security"],
-        "بيانات": ["Technology Applications", "Programming", "Business Fundamentals", "Data Security"],
-        "database": ["Data Security", "Programming", "Technology Applications", "Web Development"],
-        "data base": ["Data Security", "Programming", "Technology Applications", "Web Development"],
-        "داتابيز": ["Data Security", "Programming", "Technology Applications", "Web Development"],
-        "قواعد بيانات": ["Data Security", "Programming", "Technology Applications", "Web Development"],
-        "cyber": ["Data Security", "Networking", "Technology Applications"],
-        "سايبر": ["Data Security", "Networking", "Technology Applications"],
-        "security": ["Data Security", "Networking", "Technology Applications"],
-    }
-    
+        # 2. Dynamic Keyword Matching
+        # We try to match role keywords with category names
+        matched = []
+        
+        # Keywords to check against categories
+        keywords = role_lower.split()
+        
+        # Special mappings for broad roles to ensure coverage if keywords miss
+        # BUT only mapping to keywords, not hardcoded categories
+        meta_mappings = {
+            "backend": ["programming", "web", "database", "api"],
+            "frontend": ["web", "design", "javascript"],
+            "full stack": ["programming", "web", "database"],
+            "data": ["data", "analysis", "science", "sql", "intelligence"],
+            "manager": ["management", "leadership", "business", "project"],
+            "sales": ["sales", "marketing", "business", "negotiation"],
+            "hr": ["resources", "human", "management"],
+            "marketing": ["marketing", "social", "content", "digital"],
+        }
+        
+        search_terms = keywords
+        for k, v in meta_mappings.items():
+            if k in role_lower:
+                search_terms.extend(v)
+        
+        search_terms = list(set(search_terms)) # dedup
+
+        for cat in valid_cats:
+            cat_lower = cat.lower()
+            # If any search term is part of the category name
+            if any(term in cat_lower for term in search_terms):
+                matched.append(cat)
+        
+        # If no strict matches, return broad categories (failsafe)
+        if not matched:
+            # Return top 5 generic categories if available, else all
+            return valid_cats[:5]
+
+        return sorted(list(set(matched)))
+
     # Arabic Role Aliases (Mapped to normalized keys)
     ROLE_ARABIC_ALIASES = {
         "مدير مبيعات": "Sales Manager",
@@ -109,6 +103,18 @@ class DataLoader:
         "محلل بيانات": "Data Analyst",
     }
 
+    # Centralized Role Policy (Required skills for key tracks)
+    ROLE_POLICY = {
+        "Data Analyst": ["SQL", "Python", "Data Visualization", "Statistics", "Excel"],
+        "Backend Developer": ["Python", "SQL", "API", "Databases", "Linux"],
+        "Frontend Developer": ["HTML", "CSS", "JavaScript", "React", "Web Design"],
+        "Full Stack Developer": ["HTML", "CSS", "JavaScript", "SQL", "Python", "API"],
+        "Sales Manager": ["Sales", "Negotiation", "Communication", "CRM", "Leadership"],
+        "Marketing Manager": ["Marketing", "Digital Marketing", "Social Media", "SEO", "Analytics"],
+        "HR Manager": ["Human Resources", "Recruitment", "Training", "Team Management"],
+        "Project Manager": ["Project Management", "Agile", "Scrum", "Leadership", "Communication"],
+    }
+
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
@@ -122,51 +128,6 @@ class DataLoader:
             self.skill_aliases: Dict[str, str] = {}  # alias -> normalized skill
             self.all_skills_set: set = set()
             DataLoader._initialized = True
-    
-    def is_arabic(self, text: str) -> bool:
-        """Determines if text has significant Arabic content (>15%)."""
-        import re
-        if not text: return False
-        arabic_chars = re.findall(r'[\u0600-\u06FF]', text)
-        return (len(arabic_chars) / len(text)) > 0.15
-    
-    @staticmethod
-    def normalize_category(s: str) -> str:
-        """Normalize category string for consistent comparison (V17 Single Source of Truth)."""
-        import unicodedata
-        import re
-        if not s: return ""
-        s = unicodedata.normalize('NFKC', str(s).lower().strip())
-        s = s.replace('&', 'and')
-        s = re.sub(r'\s+', ' ', s)
-        return s
-    
-    def get_normalized_categories(self) -> Dict[str, str]:
-        """Returns a dict mapping normalized category names to their original display names."""
-        cats = self.get_all_categories()
-        return {self.normalize_category(c): c for c in cats}
-    
-    def get_categories_for_role(self, role: str) -> List[str]:
-        """Resolves a list of allowed categories for a given role/domain (Case-Insensitive)."""
-        if not role: return []
-        
-        role_norm = role.strip().lower()
-        
-        # 1. Resolve Arabic Aliases
-        if role_norm in self.ROLE_ARABIC_ALIASES:
-             role_norm = self.ROLE_ARABIC_ALIASES[role_norm].lower()
-
-        # 2. Check specific role policy
-        for policy_key, whitelist in self.ROLE_POLICY.items():
-            if policy_key.lower() == role_norm:
-                return whitelist
-            
-        # 3. Check domain whitelist fallback
-        for domain_key, whitelist in self.DOMAIN_CATEGORY_WHITELIST.items():
-            if domain_key.lower() == role_norm:
-                return whitelist
-            
-        return []
         
     def load_all(self) -> bool:
         """Load all data files. Returns True if successful."""
@@ -193,6 +154,8 @@ class DataLoader:
             self.courses_df['cover'] = self.courses_df['cover'].astype(str).str.replace(r'\?token=.*', '', regex=True)
             
         logger.info(f"Loaded {len(self.courses_df)} courses")
+        # Sync CategoryService
+        category_service.load()
     
     @staticmethod
     def normalize_skill(skill: str) -> str:
@@ -202,6 +165,21 @@ class DataLoader:
         s = re.sub(r"[_\-]+", " ", s) # Replace _ and - with space
         s = re.sub(r"\s+", " ", s)    # Collapse multiple spaces
         return s
+
+    @staticmethod
+    def normalize_category(category: str) -> str:
+        """Normalize category name for comparison."""
+        import re
+        s = str(category).lower().strip()
+        s = re.sub(r"[&_,.\s\-]+", "", s) # Remove all separators
+        return s
+
+    def get_normalized_categories(self) -> Dict[str, str]:
+        """
+        Returns a mapping of normalized category names to their display names.
+        """
+        all_cats = self.get_all_categories()
+        return {self.normalize_category(cat): cat for cat in all_cats}
 
     def _load_skills_catalog(self):
         """Load skills catalog and build alias mapping."""

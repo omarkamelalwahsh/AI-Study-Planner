@@ -1,166 +1,14 @@
+import { ChatResponse, Course } from '../types/chat';
+
 interface ChatRequest {
     session_id?: string;
     message: string;
 }
 
-interface CourseDetail {
-    course_id: string;
-    title: string;
-    level?: string;
-    category?: string;
-    instructor?: string;
-    duration_hours?: any;
-    description?: string;
-    description_short?: string;
-    description_full?: string;
-    cover?: string;
-    reason?: string;
-}
-
-interface ProjectDetail {
-    title: string;
-    difficulty: string;
-    description: string;
-    deliverables: string[];
-    suggested_tools: string[];
-    // Legacy support
-    level: string;
-    skills: string[];
-}
-
-interface SkillGroup {
-    skill_area: string;
-    why_it_matters: string;
-    skills: string[];
-}
-
-interface WeeklySchedule {
-    week: number;
-    focus: string;
-    courses: string[];
-    outcomes: string[];
-}
-
-interface LearningPlan {
-    weeks?: number;
-    hours_per_day?: number;
-    schedule: WeeklySchedule[];
-}
-
-interface ErrorDetail {
-    code: string;
-    message: string;
-}
-
-interface Card {
-    type: 'roadmap' | 'skills' | 'courses' | 'cv_summary' | 'next_steps' | 'assessment' | 'notes';
-    heading: string;
-    bullets: string[];
-}
-
-interface OneQuestion {
-    question: string;
-    choices: string[];
-}
-
-interface QuizData {
-    is_active: boolean;
-    question: string | null;
-    choices: string[];
-    collected: {
-        goal_type?: string | null;
-        track?: string | null;
-        level?: string | null;
-        weekly_time?: string | null;
-        learning_style?: string | null;
-    };
-}
-
-interface CVScore {
-    overall: number;
-    skills: number;
-    experience: number;
-    projects: number;
-    marketReadiness: number;
-    ats?: number;
-    readiness?: number;
-}
-
-interface CVSkill {
-    name: string;
-    confidence: number;
-}
-
-interface CVRadarArea {
-    area: string;
-    value: number;
-}
-
-interface CVATSItem {
-    id: string;
-    text: string;
-    done: boolean;
-}
-
-interface CVDashboard {
-    candidate: {
-        name: string;
-        targetRole: string;
-        seniority: string;
-    };
-    score: CVScore;
-    roleFit: {
-        detectedRoles: string[];
-        direction: string;
-        summary: string;
-    };
-    skills: {
-        strong: CVSkill[];
-        weak: CVSkill[];
-        missing: CVSkill[];
-    };
-    radar: CVRadarArea[];
-    projects: any[];
-    atsChecklist: CVATSItem[];
-    notes: {
-        strengths: string;
-        gaps: string;
-    };
-    recommendations: string[];
-}
-
-interface ChatResponse {
-    session_id: string;
-    intent: string;
-    language: string;
-    title: string;
-    answer: string;
-    quiz: QuizData;
-    cards: Card[];
-    radar: CVRadarArea[];
-    courses: CourseDetail[];
-    one_question?: OneQuestion | null;
-
-    // Metadata and internal tracker
-    request_id: string;
-    meta: any;
-    flow_state_updates?: any;
-
-    // Legacy support (to be phased out)
-    all_relevant_courses?: CourseDetail[];
-    projects?: ProjectDetail[];
-    skill_groups?: SkillGroup[];
-    catalog_browsing?: any | null;
-    learning_plan?: LearningPlan | null;
-    dashboard?: CVDashboard | null;
-    error?: ErrorDetail | null;
-}
-
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8001';
-const API_BASE = API_BASE_URL;
 
 export async function sendMessage(message: string, sessionId?: string): Promise<ChatResponse> {
-    const response = await fetch(`${API_BASE}/chat`, {
+    const response = await fetch(`${API_BASE_URL}/chat`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -172,42 +20,39 @@ export async function sendMessage(message: string, sessionId?: string): Promise<
     });
 
     if (!response.ok) {
-        if (response.status === 503) {
-            throw new Error('LLM is currently unavailable. Please try again.');
-        }
-        throw new Error(`API error: ${response.statusText}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.answer || `API error: ${response.statusText}`);
     }
 
     return response.json();
 }
 
-export const uploadCV = async (file: File, sessionId?: string) => {
-    const formData = new FormData()
-    formData.append('file', file)
-    if (sessionId) formData.append('session_id', sessionId)
+export const uploadCV = async (file: File, sessionId?: string): Promise<ChatResponse> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (sessionId) formData.append('session_id', sessionId);
 
-    const response = await fetch(`${API_BASE}/upload-cv`, {
+    const response = await fetch(`${API_BASE_URL}/upload-cv`, {
         method: 'POST',
         body: formData,
-    })
+    });
 
     if (!response.ok) {
-        throw new Error('فشل رفع الملف')
+        throw new Error('فشل رفع الملف');
     }
 
-    return response.json()
+    return response.json();
 }
 
-export const fetchCourseDetails = async (courseId: string) => {
-    const response = await fetch(`${API_BASE}/courses/${courseId}`)
+export const fetchCourseDetails = async (courseId: string): Promise<Course> => {
+    const response = await fetch(`${API_BASE_URL}/courses/${courseId}`);
     if (!response.ok) {
-        throw new Error('فشل جلب تفاصيل الكورس')
+        throw new Error('فشل جلب تفاصيل الكورس');
     }
-    return response.json()
+    return response.json();
 }
-
 
 export async function checkHealth(): Promise<any> {
-    const response = await fetch(`${API_BASE}/health`);
+    const response = await fetch(`${API_BASE_URL}/health`);
     return response.json();
 }

@@ -9,12 +9,6 @@ interface WelcomeHeroProps {
 }
 
 export default function WelcomeHero({ onSelectPrompt }: WelcomeHeroProps) {
-    const prompts = [
-        { text: "عاوز أبدأ أتعلم Marketing وتايه", icon: Compass },
-        { text: "ازاي أطور نفسي في الـ Data Analysis؟", icon: Zap },
-        { text: "ممكن تعملي خطة مذاكرة لـ React؟", icon: BookOpen },
-    ];
-
     return (
         <motion.div
             initial={{ opacity: 0, scale: 0.98 }}
@@ -39,28 +33,8 @@ export default function WelcomeHero({ onSelectPrompt }: WelcomeHeroProps) {
                 مستشارك المهني الذكي. بيساعدك تختار كاريرك بالمظبوط، وتتعلم أحسن الكورسات، وتعمل خطط مذاكرة متفصلة ليك مخصوص.
             </p>
 
-            {/* QUICK PROMPTS */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full max-w-4xl">
-                {prompts.map((p, i) => (
-                    <motion.button
-                        key={i}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.2 + i * 0.1 }}
-                        whileHover={{ scale: 1.03, y: -2 }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={() => onSelectPrompt(p.text)}
-                        className="p-5 glass-card rounded-2xl text-right flex flex-col gap-3 group border border-white/5 hover:border-blue-500/30 hover:bg-blue-600/5 transition-all shadow-lg"
-                    >
-                        <div className="w-10 h-10 rounded-full bg-slate-800/50 flex items-center justify-center group-hover:bg-blue-500/20 transition-colors">
-                            <p.icon className="w-5 h-5 text-slate-400 group-hover:text-blue-400 transition-colors" />
-                        </div>
-                        <span className="text-sm font-semibold text-slate-200 group-hover:text-white transition-colors leading-relaxed">
-                            {p.text}
-                        </span>
-                    </motion.button>
-                ))}
-            </div>
+            {/* QUICK PROMPTS REMOVED PER USER REQUEST */}
+            <div className="hidden"></div>
         </motion.div>
     );
 }

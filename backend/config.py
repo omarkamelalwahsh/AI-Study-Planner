@@ -20,6 +20,9 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
+# Database Configuration
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://postgres:postgres@localhost:5432/career_copilot")
+
 # Data paths
 DATA_DIR = PROJECT_ROOT / "data"
 COURSES_CSV = DATA_DIR / "courses.csv"

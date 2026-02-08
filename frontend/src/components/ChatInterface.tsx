@@ -1,44 +1,17 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
-import { sendMessage, uploadCV } from '../services/api'
+import { sendMessage, uploadCV, fetchCourseDetails } from '../services/api'
 import { useStore } from '../store/store'
 import ChatInput from './ChatInput'
 import CourseCard from './CourseCard'
 import MessageBubble from './MessageBubble'
-
-import SkillGroupCard from './SkillGroupCard'
-
-import { CVDashboard } from './CVDashboard'
 import { CourseModal } from './CourseModal'
-import { fetchCourseDetails } from '../services/api' // I might need to add this to api.ts
-
-
-interface Message {
-    id: string;
-    role: 'user' | 'assistant';
-    content: string;
-    title?: string;
-    cards?: any[];
-    one_question?: any;
-    courses?: any[];
-    all_relevant_courses?: any[];
-    projects?: any[];
-    skill_groups?: any[];
-    catalog_browsing?: any;
-    learning_plan?: any;
-    dashboard?: any;
-    intent?: string;
-    ask?: {
-        question: string;
-        choices: string[];
-    };
-}
+import { ChatResponse, Message, Course } from '../types/chat'
 
 interface ChatSession {
     id: string;
     messages: Message[];
     createdAt: Date;
 }
-
 
 export default function ChatInterface() {
     const { messages, isLoading, addMessage, setLoading, clearMessages } = useStore()
@@ -47,38 +20,15 @@ export default function ChatInterface() {
     const [error, setError] = useState<string | null>(null)
     const [isTyping, setIsTyping] = useState(false)
     const [typingText, setTypingText] = useState('')
-    const [sessions, setSessions] = useState<ChatSession[]>([])
+    const [sessions, setSessions] = useState<any[]>([])
     const [showSessions, setShowSessions] = useState(false)
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const inputRef = useRef<HTMLTextAreaElement>(null)
-    const fileInputRef = useRef<HTMLInputElement>(null)
 
-    // Modal State
-    const [selectedCourse, setSelectedCourse] = useState<any | null>(null)
+    const [selectedCourse, setSelectedCourse] = useState<Course | null>(null)
     const [isModalOpen, setIsModalOpen] = useState(false)
 
-
-    // Load sessions from localStorage on mount
-    useEffect(() => {
-        try {
-            const savedSessions = localStorage.getItem('chatSessions')
-            if (savedSessions) {
-                const parsed = JSON.parse(savedSessions)
-                if (Array.isArray(parsed)) {
-                    setSessions(parsed)
-                }
-            }
-        } catch (e) {
-            console.error("Failed to load sessions", e)
-        }
-    }, [])
-
-    // Save sessions to localStorage
-    const saveSessions = useCallback((newSessions: ChatSession[]) => {
-        setSessions(newSessions)
-        localStorage.setItem('chatSessions', JSON.stringify(newSessions))
-    }, [])
-
+    // Scroll to bottom
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
@@ -87,19 +37,12 @@ export default function ChatInterface() {
         scrollToBottom()
     }, [messages, typingText])
 
-    // Auto-focus input after send
-    useEffect(() => {
-        if (!isLoading && inputRef.current) {
-            inputRef.current.focus()
-        }
-    }, [isLoading])
-
-    // Typing animation effect
+    // Typing animation
     const animateTyping = useCallback((fullText: string, onComplete: () => void) => {
         setIsTyping(true)
         setTypingText('')
         let index = 0
-        const chunkSize = 3 // Characters per tick for speed
+        const chunkSize = 4
 
         const interval = setInterval(() => {
             if (index < fullText.length) {
@@ -111,19 +54,17 @@ export default function ChatInterface() {
                 setTypingText('')
                 onComplete()
             }
-        }, 20) // 20ms per chunk for smooth animation
+        }, 20)
 
         return () => clearInterval(interval)
     }, [])
 
-    const handleCourseClick = async (course: any) => {
-        // If we don't have full details, fetch them
+    const handleCourseClick = async (course: Course) => {
         if (!course.description_full) {
             try {
                 const fullDetails = await fetchCourseDetails(course.course_id);
                 setSelectedCourse(fullDetails);
             } catch (e) {
-                console.error("Failed to fetch course details", e);
                 setSelectedCourse(course);
             }
         } else {
@@ -132,522 +73,174 @@ export default function ChatInterface() {
         setIsModalOpen(true);
     };
 
-    const handleBotReply = (response: any) => {
+    const handleBotReply = (response: ChatResponse) => {
         if (!sessionId && response.session_id) {
             setSessionId(response.session_id);
         }
 
-        const assistantMessage: any = {
-            role: 'assistant',
+        const assistantMessage: Message = {
+            id: response.request_id || Date.now().toString(),
+            type: 'bot',
             content: response.answer,
-            title: response.title,
-            cards: response.cards || [],
-            one_question: response.one_question || null,
-            courses: response.courses || [],
-            all_relevant_courses: response.all_relevant_courses || [],
-            projects: response.projects || [],
-            skill_groups: response.skill_groups || [],
-            catalog_browsing: response.catalog_browsing || null,
-            learning_plan: response.learning_plan || null,
-            dashboard: response.dashboard || null,
-            intent: response.intent,
-            ask: response.ask || null,
+            timestamp: new Date(),
+            data: response
         };
 
         addMessage(assistantMessage);
     };
 
     const handleUploadStart = (fileName: string) => {
-        const userMsg = {
-            role: 'user',
-            content: `📄 Uploading CV: ${fileName}...`
+        const userMsg: Message = {
+            id: Date.now().toString(),
+            type: 'user',
+            content: `📄 Uploading CV: ${fileName}...`,
+            timestamp: new Date()
         }
-        addMessage(userMsg as any);
+        addMessage(userMsg);
         setLoading(true);
     };
 
-    const handleSubmit = async (e?: React.FormEvent) => {
+    const handleSubmit = async (text?: string) => {
+        const messageText = (typeof text === 'string' ? text : input).trim();
+        if (!messageText || isLoading) return
 
-        if (e) e.preventDefault()
-        if (!input.trim() || isLoading) return
-
-        const userMessage: Omit<Message, 'id' | 'timestamp'> = {
-            role: 'user',
-            content: input.trim(),
+        const userMessage: Message = {
+            id: Date.now().toString(),
+            type: 'user',
+            content: messageText,
+            timestamp: new Date()
         }
 
-        addMessage(userMessage as any)
+        addMessage(userMessage)
         setInput('')
         setLoading(true)
         setError(null)
 
         try {
-            const response = await sendMessage(input.trim(), sessionId)
+            const response = await sendMessage(messageText, sessionId)
+            if (!sessionId) setSessionId(response.session_id)
 
-            // Store session ID for continuity
-            if (!sessionId) {
-                setSessionId(response.session_id)
-            }
-
-            const assistantMessage: any = {
-                role: 'assistant',
+            const assistantMessage: Message = {
+                id: response.request_id || Date.now().toString(),
+                type: 'bot',
                 content: response.answer,
-                title: response.title,
-                cards: response.cards || [],
-                one_question: response.one_question || null,
-                courses: response.courses || [],
-                all_relevant_courses: response.all_relevant_courses || [],
-                projects: response.projects || [],
-                skill_groups: response.skill_groups || [],
-                catalog_browsing: response.catalog_browsing || null,
-                learning_plan: response.learning_plan || null,
-                dashboard: response.dashboard || null,
-                intent: response.intent,
-                ask: response.ask || null,
+                timestamp: new Date(),
+                data: response
             }
 
-            // Animate the response
             animateTyping(response.answer, () => {
-                const fullAssistantMsg = { ...assistantMessage, id: response.request_id }
-                // We add to store manually or let store handle ID? Store handles ID.
                 addMessage(assistantMessage)
-
-                // Save to sessions (Note: We need the actual messages with IDs from store... 
-                // but store updates async/sync. For simplicity, we reconstruct)
-                // Actually, let's just trigger save based on store state in a useEffect or use simple reconstruction
-                const newSession: ChatSession = {
-                    id: response.session_id,
-                    messages: [...messages, { ...userMessage, id: Date.now().toString() } as Message, fullAssistantMsg],
-                    createdAt: new Date()
-                }
-                const updatedSessions = sessions.filter(s => s.id !== response.session_id)
-                saveSessions([newSession, ...updatedSessions].slice(0, 10))
             })
         } catch (err: any) {
             setError(err.message || 'خطأ في الاتصال')
-            console.error('Chat error:', err)
         } finally {
             setLoading(false)
         }
     }
 
-    // Handle keyboard shortcuts: Enter to send, Shift+Enter for new line
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault()
-            handleSubmit()
-        }
-    }
-
-    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0]
-        if (!file) return
-
-        setLoading(true)
-        setError(null)
-
-        // Add optimistic user message for file upload
-        const userMsg = {
-            role: 'user',
-            content: `📄 Uploading CV: ${file.name}...`
-        }
-        addMessage(userMsg as any)
-
+    const handleUploadCV = async (file: File) => {
+        handleUploadStart(file.name);
         try {
-            const response = await uploadCV(file, sessionId)
+            const response = await uploadCV(file, sessionId);
+            if (!sessionId) setSessionId(response.session_id);
 
-            if (!sessionId) {
-                setSessionId(response.session_id)
-            }
-
-            const assistantMessage: any = {
-                role: 'assistant',
+            const assistantMessage: Message = {
+                id: response.request_id || Date.now().toString(),
+                type: 'bot',
                 content: response.answer,
-                courses: response.courses,
-                projects: response.projects,
-                skill_groups: response.skill_groups,
-                learning_plan: response.learning_plan,
-                dashboard: response.dashboard,
-                intent: response.intent,
-            }
-
-            addMessage(assistantMessage)
-
-            // Save to sessions
-            const newSession: ChatSession = {
-                id: response.session_id,
-                messages: [...messages, { ...userMsg, id: Date.now().toString() } as Message, { ...assistantMessage, id: response.request_id }],
-                createdAt: new Date()
-            }
-            const updatedSessions = sessions.filter(s => s.id !== response.session_id)
-            saveSessions([newSession, ...updatedSessions].slice(0, 10))
-
+                timestamp: new Date(),
+                data: response
+            };
+            addMessage(assistantMessage);
         } catch (err: any) {
-            setError(err.message || 'فشل رفع الملف')
+            setError(err.message || 'فشل رفع الملف');
         } finally {
-            setLoading(false)
-            if (fileInputRef.current) fileInputRef.current.value = ''
+            setLoading(false);
         }
     }
 
-    const triggerFileUpload = () => {
-        fileInputRef.current?.click()
-    }
-
-    // New chat function
     const handleNewChat = () => {
         clearMessages()
         setSessionId(undefined)
         setError(null)
-        setShowSessions(false)
-        inputRef.current?.focus()
-    }
-
-    // Load a previous session
-    const handleLoadSession = (session: ChatSession) => {
-        clearMessages()
-        // Bulk add - tricky with current store action "addMessage". 
-        // We'll iterate or add a "setMessages" action to store.
-        // ideally add 'setMessages' to store. For now, iterate:
-        session.messages.forEach(m => addMessage(m as any))
-
-        setSessionId(session.id)
-        setShowSessions(false)
-    }
-
-    // Delete a session
-    const handleDeleteSession = (sessionIdToDelete: string, e: React.MouseEvent) => {
-        e.stopPropagation()
-        const updatedSessions = sessions.filter(s => s.id !== sessionIdToDelete)
-        saveSessions(updatedSessions)
-
-        // If deleting current session, start new chat
-        if (sessionId === sessionIdToDelete) {
-            handleNewChat()
-        }
     }
 
     return (
-        <div className="chat-interface">
-            {/* Session controls */}
-            <div className="session-controls">
-                <button className="new-chat-btn" onClick={handleNewChat} title="محادثة جديدة">
-                    ➕ محادثة جديدة
-                </button>
-                <button
-                    className="sessions-btn"
-                    onClick={() => setShowSessions(!showSessions)}
-                    title="المحادثات السابقة"
-                >
-                    📋 المحادثات ({sessions.length})
-                </button>
-            </div>
-
-            {/* Sessions dropdown */}
-            {showSessions && sessions.length > 0 && (
-                <div className="sessions-dropdown">
-                    {sessions.map((session) => (
-                        <div
-                            key={session.id}
-                            className={`session-item ${session.id === sessionId ? 'active' : ''}`}
-                            onClick={() => handleLoadSession(session)}
-                        >
-                            <span className="session-preview">
-                                {session.messages[0]?.content.slice(0, 40) || 'محادثة جديدة'}...
-                            </span>
-                            <button
-                                className="delete-session-btn"
-                                onClick={(e) => handleDeleteSession(session.id, e)}
-                                title="حذف المحادثة"
-                            >
-                                🗑️
-                            </button>
-                        </div>
-                    ))}
-                </div>
-            )}
-
-            <div className="chat-messages">
+        <div className="flex flex-col h-screen bg-[#0a0a0b] text-white">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 {messages.length === 0 && (
-                    <div className="welcome-message">
-                        <h2>مرحباً! 👋</h2>
-                        <p>أنا مساعدك الذكي للتوجيه المهني واختيار الكورسات</p>
-                        <div className="suggestions">
-                            <button onClick={() => setInput('عايز أبدأ مسار تعلم مهارات الـ Data Analysis')}>
-                                عايز أبدأ مسار تعلم مهارات الـ Data Analysis
-                            </button>
-                            <button onClick={() => setInput('إيه هي الكورسات المناسبة عشان أبقى مبرمج محترف؟')}>
-                                إيه هي الكورسات المناسبة عشان أبقى مبرمج محترف؟
-                            </button>
-                            <button onClick={() => setInput('محتاج أحسن مهارات التواصل والـ Soft Skills')}>
-                                محتاج أحسن مهارات التواصل والـ Soft Skills
-                            </button>
-                        </div>
+                    <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
+                        <h2 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent italic">Zedny AI</h2>
+                        <p className="text-gray-400">مساعدك المهني الذكي. ابدأ بسؤالي عن أي مهارة أو ارفع الـ CV بتاعك.</p>
                     </div>
                 )}
 
-                // Typing and loading states
-                // ... (previous code)
-
-                {messages.map((msg: any) => (
-                    <div key={msg.id} className="message-container">
+                {messages.map((msg: Message) => (
+                    <div key={msg.id} className="flex flex-col">
                         <MessageBubble message={msg} />
 
-                        {/* NEW: Render Cards (Strict Schema v2) */}
-                        {msg.cards && msg.cards.length > 0 && (
-                            <div className="cards-container space-y-4 my-4" style={{ marginLeft: '60px' }}>
-                                {msg.cards.map((card: any, idx: number) => (
-                                    <div key={idx} className="card-item p-4 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
-                                        <h4 className="text-blue-400 font-bold mb-2 flex items-center gap-2">
-                                            {card.type === 'roadmap' && '🗺️'}
-                                            {card.type === 'skills' && '📊'}
-                                            {card.type === 'summary' && '📝'}
-                                            {card.type === 'info' && 'ℹ️'}
-                                            {card.title}
-                                        </h4>
-                                        {card.content && <p className="text-gray-300 text-sm mb-3">{card.content}</p>}
-
-                                        {card.items && (
-                                            <ul className="space-y-1">
-                                                {card.items.map((item: string, i: number) => (
-                                                    <li key={i} className="text-sm text-gray-400 flex items-start gap-2">
-                                                        <span className="text-blue-500 mt-1">•</span>
-                                                        {item}
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        )}
-
-                                        {card.steps && (
-                                            <div className="space-y-3 mt-2">
-                                                {card.steps.map((step: any, i: number) => (
-                                                    <div key={i} className="flex gap-3">
-                                                        <div className="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-xs shrink-0 mt-0.5">
-                                                            {i + 1}
-                                                        </div>
-                                                        <div>
-                                                            <div className="text-sm font-medium text-white">{step.title}</div>
-                                                            <div className="text-xs text-gray-400">{step.desc}</div>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
+                        {msg.data?.next_actions && msg.data.next_actions.length > 0 && (
+                            <div className="flex flex-wrap gap-2 my-4 ml-12">
+                                {msg.data.next_actions.map((action, idx) => (
+                                    <button
+                                        key={idx}
+                                        className="px-4 py-2 rounded-full border border-blue-500/30 bg-blue-500/5 text-blue-300 hover:bg-blue-500/20 transition-all text-sm"
+                                        onClick={() => handleSubmit(action)}
+                                    >
+                                        {action}
+                                    </button>
                                 ))}
                             </div>
                         )}
 
-                        {/* NEW: Render OneQuestion (Strict Schema v2) */}
-                        {msg.one_question && (
-                            <div className="one-question-container space-y-3 my-4" style={{ marginLeft: '60px' }}>
-                                <div className="text-sm text-gray-400 font-medium italic">
-                                    {msg.one_question.question}
-                                </div>
-                                <div className="flex flex-wrap gap-2">
-                                    {msg.one_question.choices.map((choice: string, idx: number) => (
-                                        <button
-                                            key={idx}
-                                            className="px-4 py-2 rounded-full border border-blue-500/50 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 transition-all text-sm"
-                                            onClick={() => setInput(choice)}
-                                        >
-                                            {choice}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Legacy Handlers (Keeping for compatibility) */}
-                        {msg.ask && msg.ask.choices && msg.ask.choices.length > 0 && (
-                            <div className="choice-questions-container" style={{ margin: '12px 0 12px 60px' }}>
-                                <div style={{ marginBottom: '8px', color: '#94a3b8', fontSize: '0.9rem' }}>
-                                    {msg.ask.question}
-                                </div>
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                                    {msg.ask.choices.map((choice: string, idx: number) => (
-                                        <button
-                                            key={idx}
-                                            className="choice-chip"
-                                            onClick={() => setInput(choice)}
-                                            style={{
-                                                padding: '8px 16px',
-                                                borderRadius: '20px',
-                                                border: '1px solid #3b82f6',
-                                                background: 'rgba(59, 130, 246, 0.1)',
-                                                color: '#60a5fa',
-                                                cursor: 'pointer',
-                                                fontSize: '0.95rem',
-                                                transition: 'all 0.2s'
-                                            }}
-                                            onMouseOver={(e) => e.currentTarget.style.background = 'rgba(59, 130, 246, 0.2)'}
-                                            onMouseOut={(e) => e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)'}
-                                        >
-                                            {choice}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {msg.catalog_browsing && (
-                            <div className="catalog-browsing-container" style={{ margin: '12px 0 12px 60px' }}>
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                                    {msg.catalog_browsing.categories?.map((cat: any, idx: number) => (
-                                        <button
-                                            key={idx}
-                                            className="category-chip"
-                                            onClick={() => setInput(cat.name)}
-                                            style={{
-                                                padding: '6px 14px',
-                                                borderRadius: '20px',
-                                                border: '1px solid #8b5cf6',
-                                                background: 'rgba(139, 92, 246, 0.1)',
-                                                color: '#a78bfa',
-                                                cursor: 'pointer',
-                                                fontSize: '0.9rem'
-                                            }}
-                                        >
-                                            {cat.name}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {msg.dashboard && (
-                            <div style={{ marginLeft: '60px' }}>
-                                <CVDashboard data={msg.dashboard} />
-                            </div>
-                        )}
-
-                        {msg.skill_groups && msg.skill_groups.length > 0 && (
-                            <div className="skill-groups-container" style={{ marginLeft: '60px' }}>
-                                <h3>📊 المهارات المطلوبة:</h3>
-                                <div className="skill-groups-grid">
-                                    {msg.skill_groups.map((group: any, idx: number) => (
-                                        <SkillGroupCard
-                                            key={idx}
-                                            group={group}
-                                            allCourses={msg.courses}
-                                        />
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {msg.courses && msg.courses.length > 0 && (
-                            <div className="courses-section" style={{ marginLeft: '60px' }}>
-                                <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <span>🌟 ترشيحات مختارة:</span>
-                                    <span style={{ fontSize: '0.7rem', background: '#3b82f6', color: '#fff', padding: '2px 6px', borderRadius: '4px' }}>Top Picks</span>
-                                </h3>
-                                <div className="courses-grid" style={{ marginBottom: '16px' }}>
-                                    {msg.courses.map((course: any) => (
+                        {msg.data?.courses && msg.data.courses.length > 0 && (
+                            <div className="ml-12 my-4 space-y-4">
+                                <h3 className="text-lg font-bold">🌟 ترشيحات مختارة:</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {msg.data.courses.map((course) => (
                                         <CourseCard key={course.course_id} course={course} onClick={handleCourseClick} />
                                     ))}
-
                                 </div>
                             </div>
                         )}
 
-                        {msg.all_relevant_courses && msg.all_relevant_courses.length > 0 && (
-                            <div className="all-relevant-section" style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '16px', marginTop: '16px', marginLeft: '60px' }}>
-                                <h3 style={{ fontSize: '1.1rem', color: '#94a3b8' }}>📚 نتائج إضافية ذات صلة:</h3>
-                                <div className="courses-grid">
-                                    {(msg.all_relevant_courses || []).slice(0, 5).map((course: any) => (
-                                        <CourseCard key={course.course_id} course={course} onClick={handleCourseClick} />
-                                    ))}
-
-                                </div>
-                                {msg.all_relevant_courses.length > 5 && (
+                        {msg.data?.categories && msg.data.categories.length > 0 && (
+                            <div className="flex flex-wrap gap-2 my-4 ml-12">
+                                {msg.data.categories.map((cat, idx) => (
                                     <button
-                                        className="show-more-btn"
-                                        onClick={() => sendMessage(input || "أظهر المزيد من الكورسات")}
-                                        style={{
-                                            marginTop: '12px',
-                                            width: '100%',
-                                            padding: '12px',
-                                            background: 'rgba(59, 130, 246, 0.1)',
-                                            border: '1px dashed #3b82f6',
-                                            borderRadius: '8px',
-                                            color: '#60a5fa',
-                                            cursor: 'pointer'
-                                        }}
+                                        key={idx}
+                                        className="px-3 py-1.5 rounded-full border border-purple-500/30 bg-purple-500/5 text-purple-300 hover:bg-purple-500/20 transition-all text-sm"
+                                        onClick={() => handleSubmit(cat)}
                                     >
-                                        ➕ أظهر المزيد من النتائج
+                                        {cat}
                                     </button>
-                                )}
-                            </div>
-                        )}
-
-                        {msg.learning_plan && (
-                            <div className="learning-plan-container" style={{ marginLeft: '60px' }}>
-                                <h3>🗺️ خطة التعلم المقترحة:</h3>
-                                <div className="learning-plan-phases">
-                                    {(msg.learning_plan.phases || []).map((phase: any, idx: number) => (
-                                        <div key={idx} className="phase-card" style={{ marginBottom: '16px', background: 'rgba(255,255,255,0.05)', padding: '16px', borderRadius: '8px', borderLeft: '4px solid #8b5cf6' }}>
-                                            <div className="phase-header" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                                                <h4 style={{ margin: 0, color: '#fff' }}>{phase.title}</h4>
-                                                <span className="phase-duration" style={{ background: 'rgba(139, 92, 246, 0.2)', color: '#a78bfa', padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem' }}>{phase.weeks} Weeks</span>
-                                            </div>
-                                            <div className="phase-skills" style={{ marginBottom: '8px' }}>
-                                                {(phase.skills || []).map((s: string, i: number) => (
-                                                    <span key={i} style={{ display: 'inline-block', background: 'rgba(59, 130, 246, 0.1)', color: '#60a5fa', fontSize: '0.8rem', padding: '2px 6px', borderRadius: '4px', marginRight: '6px' }}>{s}</span>
-                                                ))}
-                                            </div>
-                                            {phase.deliverables && (
-                                                <div style={{ fontSize: '0.9rem', color: '#94a3b8' }}>
-                                                    🎯 <strong>Tasks:</strong> {phase.deliverables.join(', ')}
-                                                </div>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {msg.projects && msg.projects.length > 0 && (
-                            <div className="projects-section" style={{ marginLeft: '60px' }}>
-                                <h3>🚀 مشاريع تطبيقية:</h3>
-                                <div className="projects-grid">
-                                    {msg.projects.map((project: any, idx: number) => (
-                                        <div key={idx} className="project-card" style={{ background: 'rgba(255,255,255,0.05)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)' }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                                                <h4 style={{ margin: 0 }}>{project.title}</h4>
-                                                <span className="difficulty-badge" style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: '10px', background: project.difficulty === 'Expert' ? '#ef4444' : '#10b981' }}>{project.difficulty}</span>
-                                            </div>
-                                            <p style={{ fontSize: '0.9rem', color: '#cbd5e1' }}>{project.description}</p>
-                                        </div>
-                                    ))}
-                                </div>
+                                ))}
                             </div>
                         )}
                     </div>
                 ))}
 
-                {/* Typing and loading states */}
-                {isTyping && typingText && (
-                    <div className="message-bubble assistant-message">
-                        <div className="message-content">
-                            <div className="message-text">{typingText}<span className="cursor">|</span></div>
+                {isTyping && (
+                    <div className="flex gap-4 ml-2">
+                        <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-xs">AI</div>
+                        <div className="bg-white/5 p-4 rounded-2xl rounded-tl-none border border-white/10 max-w-[80%]">
+                            <p>{typingText}<span className="animate-pulse">|</span></p>
                         </div>
                     </div>
                 )}
 
                 {isLoading && !isTyping && (
-                    <div className="loading-indicator" style={{ display: 'flex', gap: '8px', padding: '20px', color: '#94a3b8' }}>
-                        <div className="spinner"></div>
+                    <div className="flex items-center gap-2 text-gray-400 ml-12 italic text-sm">
+                        <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce"></div>
                         <span>جاري التفكير...</span>
                     </div>
                 )}
 
                 {error && (
-                    <div className="error-message" style={{ color: '#ef4444', padding: '10px 60px' }}>
+                    <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl text-red-400 mx-12">
                         ⚠️ {error}
                     </div>
                 )}
-
                 <div ref={messagesEndRef} />
             </div>
 
@@ -656,12 +249,9 @@ export default function ChatInterface() {
                 onChange={setInput}
                 onSend={handleSubmit}
                 isLoading={isLoading}
-                sessionId={sessionId}
-                onBotReply={handleBotReply}
-                onUploadStart={handleUploadStart}
+                onUploadCV={handleUploadCV}
             />
 
-            {/* Course Modal */}
             {isModalOpen && selectedCourse && (
                 <CourseModal
                     course={selectedCourse}
@@ -669,6 +259,5 @@ export default function ChatInterface() {
                 />
             )}
         </div>
-
     )
 }

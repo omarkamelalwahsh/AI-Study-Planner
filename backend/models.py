@@ -12,6 +12,11 @@ class Card(BaseModel):
     heading: str
     bullets: List[str]
 
+class NextAction(BaseModel):
+    text: str
+    type: str = "follow_up" # follow_up | course_search | catalog_browse | retry | open_question | unknown
+    payload: Optional[Dict[str, Any]] = None
+
 class RadarItem(BaseModel):
     area: str
     value: int
@@ -28,13 +33,11 @@ class IntentType(str, Enum):
     COURSE_SEARCH = "COURSE_SEARCH"
     CATALOG_BROWSE = "CATALOG_BROWSE"
     CAREER_GUIDANCE = "CAREER_GUIDANCE"
+    PROJECT_IDEAS = "PROJECT_IDEAS"  # New: specifically for project suggestions
     GENERAL_QA = "GENERAL_QA"
     FOLLOW_UP = "FOLLOW_UP"
-    SAFE_FALLBACK = "SAFE_FALLBACK"
-    CV_ANALYSIS = "CV_ANALYSIS"
-    PROJECT_IDEAS = "PROJECT_IDEAS"
-    COURSE_DETAILS = "COURSE_DETAILS"
-    LEARNING_PATH = "LEARNING_PATH"
+    OUT_OF_SCOPE = "OUT_OF_SCOPE"
+    UNKNOWN = "UNKNOWN"
 
 class ChatRequest(BaseModel):
     """Incoming chat request from frontend"""
@@ -55,6 +58,7 @@ class CourseDetail(BaseModel):
     description_full: Optional[str] = None
     reason: Optional[str] = None
     cover: Optional[str] = None
+    fit: Optional[str] = None  # Added for relevance explanation
     linked_skill_keys: List[str] = Field(default_factory=list)
     action: Optional[Action] = None
 
@@ -159,15 +163,27 @@ class FlowStateUpdates(BaseModel):
     time_per_day: Optional[str] = None
     active_flow: Optional[str] = None
 
-class IntentResult(BaseModel):
-    """Result from intent classification"""
-    intent: IntentType
+class RouterOutput(BaseModel):
+    """Output from the LLM Router"""
+    intent: str  # Kept as string to allow flexibility, mapped to IntentType later
     topic: Optional[str] = None
+    needs_courses: bool = False
+    needs_plan: bool = False
+    needs_projects: bool = False
+    one_question: Optional[OneQuestion] = None
+
+class IntentResult(BaseModel):
+    """Legacy Intent Result (kept for compatibility during migration)"""
+    intent: IntentType
+    confidence: float = 0.0
+    topic: Optional[str] = None
+    sub_topic: Optional[str] = None
     role: Optional[str] = None
     level: Optional[str] = None
     specific_course: Optional[str] = None
-    confidence: float = 0.0
     needs_courses: bool = False
+    needs_explanation: bool = False
+    needs_one_question: bool = False # Legacy flag, superseded by router output
     slots: dict = Field(default_factory=dict)
 
 class SemanticResult(BaseModel):
@@ -210,28 +226,21 @@ class CVDashboard(BaseModel):
     radar: List[RadarItem] = Field(default_factory=list)
 
 class ChatResponse(BaseModel):
-    """Final Production JSON Output Contract"""
-    success: bool = True
+    """The unified, stable response schema for the Career Copilot."""
     intent: IntentType
-    message: str = Field(..., alias="answer")
-    courses: List[CourseDetail] = Field(default_factory=list)
-    categories: List[str] = Field(default_factory=list)
-    next_action: Optional[str] = None
-    errors: List[str] = Field(default_factory=list)
+    answer: str = Field(..., description="The textual response to the user.")
+    courses: List[CourseDetail] = Field(default_factory=list, description="List of recommended courses.")
+    projects: List[ProjectDetail] = Field(default_factory=list, description="List of suggested project ideas.")
+    categories: List[str] = Field(default_factory=list, description="Relevant catalog categories.")
+    next_actions: List[NextAction] = Field(default_factory=list, description="Suggested next steps or buttons.")
+    session_state: Dict[str, Any] = Field(default_factory=dict, description="Metadata and session-specific state.")
     
-    # Extensions
-    language: str = "en"
+    # Optional fields for internal tracking / UI components
+    success: bool = True
     session_id: Optional[str] = None
     request_id: Optional[str] = None
-    flow_state_updates: Optional[FlowStateUpdates] = None
+    errors: List[str] = Field(default_factory=list)
     meta: Dict[str, Any] = Field(default_factory=dict)
-    
-    # UI Components
-    cards: List[Card] = Field(default_factory=list)
-    radar: List[RadarItem] = Field(default_factory=list)
-    quiz: QuizData = Field(default_factory=QuizData)
-    one_question: Optional[OneQuestion] = None
-    dashboard: Optional[CVDashboard] = None
 
     class Config:
         populate_by_name = True

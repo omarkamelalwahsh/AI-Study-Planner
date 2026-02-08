@@ -76,32 +76,60 @@ class Conversation:
 
 class ConversationMemory:
     """
-    In-memory conversation storage.
-    In production, this would use Redis or a database.
+    Async wrapper around SessionManager for conversation persistence.
     """
     
-    def __init__(self, max_sessions: int = 1000):
-        self._conversations: Dict[str, Conversation] = {}
-        self._max_sessions = max_sessions
+    def __init__(self):
+        # Fallback storage for when DB fails or is misconfigured
+        self._memory_fallback: Dict[str, dict] = {}
+        # Message fallback
+        self._message_fallback: Dict[str, List[dict]] = {}
     
-    def get_or_create(self, session_id: str) -> Conversation:
-        """Get existing conversation or create new one."""
-        if session_id not in self._conversations:
-            self._conversations[session_id] = Conversation(session_id=session_id)
-            self._cleanup_if_needed()
-        return self._conversations[session_id]
-    
-    def get(self, session_id: str) -> Optional[Conversation]:
-        """Get conversation by session ID."""
-        return self._conversations.get(session_id)
-    
-    def add_user_message(self, session_id: str, content: str) -> Conversation:
-        """Add a user message to the conversation."""
-        conv = self.get_or_create(session_id)
-        conv.add_message("user", content)
-        return conv
-    
-    def add_assistant_message(
+    async def get_session_state(self, session_id: str) -> dict:
+        """Get the full session state dictionary from DB with memory fallback."""
+        from database.session_manager import session_manager
+        try:
+            state = await session_manager.get_session_state(session_id)
+            if state:
+                return state
+        except Exception as e:
+            logger.error(f"Memory: Failed to get state from DB, using fallback: {e}")
+            
+        return self._memory_fallback.get(session_id, {})
+
+    async def update_session_state(self, session_id: str, updates: dict) -> None:
+        """Update the session state with new values (DB + Memory fallback)."""
+        from database.session_manager import session_manager
+        
+        # 1. Update In-Memory Fallback
+        current = self._memory_fallback.get(session_id, {})
+        current.update(updates)
+        self._memory_fallback[session_id] = current
+        
+        # 2. Attempt DB synchronization
+        try:
+            db_current = await session_manager.get_session_state(session_id) or {}
+            db_current.update(updates)
+            await session_manager.update_session_state(session_id, db_current)
+        except Exception as e:
+            logger.error(f"Memory: Failed to sync state to DB: {e}")
+
+    async def add_user_message(self, session_id: str, content: str) -> None:
+        """Add a user message (DB + Memory fallback)."""
+        from database.session_manager import session_manager
+        
+        # 1. Update In-Memory
+        if session_id not in self._message_fallback:
+            self._message_fallback[session_id] = []
+        self._message_fallback[session_id].append({"role": "user", "content": content, "timestamp": datetime.now()})
+        
+        # 2. Attempt DB
+        try:
+            await session_manager.add_message(session_id, "user", content)
+        except Exception as e:
+            logger.error(f"Memory: Failed to add user message to DB: {e}")
+
+    async def add_assistant_message(
         self,
         session_id: str,
         content: str,
@@ -110,62 +138,40 @@ class ConversationMemory:
         skills: List[str] = None,
         topic: str = None,
         state_updates: dict = None
-    ) -> Conversation:
-        """Add an assistant message with metadata."""
-        conv = self.get_or_create(session_id)
-        conv.add_message("assistant", content, {
+    ) -> None:
+        """Add an assistant message with metadata and update state."""
+        from database.session_manager import session_manager
+        
+        meta = {
             "intent": intent,
             "role": role,
             "skills": skills or [],
             "topic": topic
-        })
+        }
+        await session_manager.add_message(session_id, "assistant", content, meta)
         
-        # Update conversation context
-        if intent:
-            conv.last_intent = intent
-        if role:
-            conv.last_role = role
-        if topic:
-            conv.last_topic = topic
-        if skills:
-            conv.last_skills = skills
-        if state_updates:
-            conv.state.update(state_updates)
-        
-        return conv
+        # Update conversation context/state
+        if intent or role or topic or skills or state_updates:
+            updates = {}
+            if intent: updates["last_intent"] = intent
+            if role: updates["last_role"] = role
+            if topic: updates["last_topic"] = topic
+            if skills: updates["last_skills"] = skills
+            if state_updates: updates.update(state_updates)
+            
+            await self.update_session_state(session_id, updates)
     
-    def get_context(self, session_id: str) -> str:
+    async def get_context(self, session_id: str, max_messages: int = 6) -> str:
         """Get conversation context for a session."""
-        conv = self.get(session_id)
-        if conv:
-            return conv.get_context()
-        return ""
+        from database.session_manager import session_manager
+        messages = await session_manager.get_messages(session_id, max_messages)
         
-    def get_session_state(self, session_id: str) -> dict:
-        """Get the full session state dictionary."""
-        conv = self.get(session_id)
-        if conv:
-            return conv.get_state()
-        return {}
-
-    def update_session_state(self, session_id: str, updates: dict) -> None:
-        """Update the session state with new values."""
-        conv = self.get_or_create(session_id)
-        conv.state.update(updates)
-    
-    def _cleanup_if_needed(self):
-        """Remove oldest sessions if we exceed max."""
-        if len(self._conversations) > self._max_sessions:
-            # Sort by creation time and remove oldest
-            sorted_sessions = sorted(
-                self._conversations.items(),
-                key=lambda x: x[1].created_at
-            )
-            to_remove = len(self._conversations) - self._max_sessions
-            for session_id, _ in sorted_sessions[:to_remove]:
-                del self._conversations[session_id]
-            logger.info(f"Cleaned up {to_remove} old sessions")
-
+        context_parts = []
+        for msg in messages:
+            role_label = "المستخدم" if msg["role"] == "user" else "المساعد"
+            context_parts.append(f"{role_label}: {msg['content'][:200]}")
+        
+        return "\n".join(context_parts)
 
 # Global memory instance
 conversation_memory = ConversationMemory()

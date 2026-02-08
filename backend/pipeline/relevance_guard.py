@@ -71,7 +71,7 @@ class RelevanceGuard:
              user_domains.update({str(d).lower() for d in previous_domains})
         
         # Merged Intent: Skip strict axes filtering for roadmaps
-        guidance_intents = [IntentType.LEARNING_PATH, IntentType.CAREER_GUIDANCE]
+        guidance_intents = [IntentType.CAREER_GUIDANCE]
         
         # 1. Resolve Data-Driven Track/Categories (V16 Production Rule)
         from pipeline.track_resolver import track_resolver
@@ -155,7 +155,6 @@ class RelevanceGuard:
                 filtered = []
                 for c in courses[:6]:
                     c_copy = copy.deepcopy(c)
-                    c_copy.fit = "Closest Match"
                     filtered.append(c_copy)
                 logger.info(f"Zero-Results Fallback 2: Returning {len(filtered)} closest matches.")
 

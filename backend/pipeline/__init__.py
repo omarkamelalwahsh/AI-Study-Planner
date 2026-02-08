@@ -6,6 +6,7 @@ from pipeline.retriever import CourseRetriever
 from pipeline.relevance_guard import RelevanceGuard
 from pipeline.response_builder import ResponseBuilder
 from pipeline.consistency_check import ConsistencyChecker
+from pipeline.followup_resolver import FollowupResolver
 
 __all__ = [
     "IntentRouter",
@@ -15,4 +16,5 @@ __all__ = [
     "RelevanceGuard",
     "ResponseBuilder",
     "ConsistencyChecker",
+    "FollowupResolver",
 ]

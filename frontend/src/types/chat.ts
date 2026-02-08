@@ -1,46 +1,31 @@
+/**
+ * Career Copilot - Frontend Chat Types
+ * Standardized to match Backend Production Schema v2
+ */
+
 export interface Course {
-    course_id: string | number;
+    course_id: string;
     title: string;
-    category: string;
-    level: string;
-    instructor: string;
-    description?: string;
-    why_recommended?: string;
-    thumbnail?: string;
-}
-
-export interface LearningItem {
-    day_or_week: string;
-    topics: string[];
-    tasks: string[];
-    deliverable?: string;
-}
-
-export interface LearningPlan {
-    topic: string;
-    duration: string;
-    time_per_day: string;
-    schedule: LearningItem[];
-}
-
-export interface ChoiceQuestion {
-    question: string;
-    choices: string[];
+    category?: string;
+    level?: string;
+    instructor?: string;
+    description_short?: string;
+    description_full?: string;
+    cover?: string;
+    reason?: string; // Matching backend 'reason' for recommendation
 }
 
 export interface ChatResponse {
     intent: string;
-    language: 'ar' | 'en';
     answer: string;
-    ask: ChoiceQuestion | null;
     courses: Course[];
-    learning_plan: LearningPlan | null;
-    projects: any[];
-    one_question?: {
-        question: string;
-        choices: string[];
-    };
-    dashboard?: any; // Rich CV dashboard data
+    categories: string[];
+    next_actions: string[];
+    session_state: Record<string, any>;
+    session_id?: string;
+    request_id?: string;
+    meta?: Record<string, any>;
+    errors?: string[];
 }
 
 export interface Message {
